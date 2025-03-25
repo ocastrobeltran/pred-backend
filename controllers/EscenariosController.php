@@ -5,7 +5,7 @@ use App\Models\Escenario;
 use App\Utils\ResponseUtil;
 use App\Middleware\AuthMiddleware;
 
-class EscenarioController {
+class EscenariosController {
     private $escenario_model;
     public $user;
     
