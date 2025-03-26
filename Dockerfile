@@ -1,43 +1,28 @@
-# Usar una imagen base con PHP 8.2 y Apache
-FROM php:8.2-apache
-
-# Instalar dependencias del sistema
-RUN apt-get update && apt-get install -y \
-    git \
-    unzip \
-    libpng-dev \
-    libonig-dev \
-    libxml2-dev \
-    zip \
-    && docker-php-ext-install mysqli mbstring
+# Imagen base con PHP 8.2 y Composer
+FROM php:8.2-cli
 
 # Instalar Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Configurar directorio de trabajo
-WORKDIR /var/www/html
+# Instalar extensiones necesarias como mysqli
+RUN apt-get update && docker-php-ext-install mysqli
 
-# Copiar archivos del proyecto
+# Crear directorio de la app
+WORKDIR /app
+
+# Copiar el contenido del proyecto
 COPY . .
 
-# Instalar dependencias de Composer
-RUN composer install --no-interaction --prefer-dist --optimize-autoloader
+# Instalar dependencias con Composer y generar autoload
+RUN composer install --no-interaction --prefer-dist --optimize-autoloader \
+  && composer dump-autoload
 
-# Generar autoload de manera explícita
-RUN composer dump-autoload -o
+# Ejecutar test de conexión (opcional, cuidado si la DB aún no está activa)
+# Puedes comentar esta línea si no quieres que falle el build si no se conecta
+# RUN php test_db_connection.php
 
-# Configurar permisos
-RUN chown -R www-data:www-data /var/www/html
+# Exponer el puerto
+EXPOSE 8000
 
-# Habilitar módulos de Apache
-RUN a2enmod rewrite \
-    && a2enmod headers
-
-# Configurar ServerName para suprimir la advertencia
-RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
-
-# Exponer puerto
-EXPOSE 80
-
-# Comando para iniciar Apache
-CMD ["apache2-foreground"]
+# Comando para iniciar el servidor PHP embebido
+CMD php -S 0.0.0.0:8000 index.php && php test_db_connection.php
