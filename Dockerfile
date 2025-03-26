@@ -33,7 +33,7 @@ RUN chown -R www-data:www-data /var/www/html
 RUN a2enmod rewrite
 
 # Exponer puerto
-EXPOSE 80
+EXPOSE 8000
 
 # Comando para iniciar Apache
 CMD ["apache2-foreground"]
