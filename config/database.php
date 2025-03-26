@@ -10,7 +10,7 @@ class Database {
     private $username;
     private $password;
     private $port;
-    private $conn;
+    public $conn;
 
     public function __construct() {
         $dotenv = \Dotenv\Dotenv::createImmutable(__DIR__ . '/../');
