@@ -17,4 +17,4 @@ RUN composer install --no-interaction --prefer-dist --optimize-autoloader
 EXPOSE 8000
 
 # Comando para iniciar el servidor PHP embebido
-CMD ["php", "-S", "0.0.0.0:8000", "-t", "public"]
+CMD ["php", "-S", "0.0.0.0:8000"]

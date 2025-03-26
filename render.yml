@@ -6,4 +6,3 @@ services:
     branch: main
     region: oregon
     dockerfilePath: Dockerfile
-    healthCheckPath: /
