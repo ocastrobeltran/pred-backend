@@ -6,3 +6,7 @@ services:
     branch: main
     region: oregon
     dockerfilePath: Dockerfile
+    healthCheckPath: /api/test
+    envVars:
+      - key: PHP_ENV
+        value: production

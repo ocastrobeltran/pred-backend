@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Obtener la URI solicitada
 $request_uri = $_SERVER['REQUEST_URI'];
-$base_path = ''; // Ajusta esto según tu configuración
+$base_path = '/pred-backend'; // Ajusta esto según tu configuración
 $request_path = str_replace($base_path, '', $request_uri);
 $request_path = trim($request_path, '/');
 $path_parts = explode('/', $request_path);
