@@ -1,5 +1,7 @@
 <?php
 require 'vendor/autoload.php';
+
+// Mostrar errores para depuración
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
@@ -36,26 +38,26 @@ $path_parts = explode('/', $request_path);
 $api_prefix = 'api';
 if (count($path_parts) > 0 && $path_parts[0] === $api_prefix) {
     array_shift($path_parts); // Eliminar 'api' del path
-    
+
     if (count($path_parts) > 0) {
         $controller_name = ucfirst($path_parts[0]) . 'Controller';
         array_shift($path_parts); // Eliminar el nombre del controlador
-        
+
         $action = count($path_parts) > 0 ? $path_parts[0] : 'index';
         array_shift($path_parts); // Eliminar la acción
-        
+
         $params = $path_parts; // Los parámetros restantes
-        
+
         // Construir la ruta del controlador
         $controller_file = "controllers/{$controller_name}.php";
         $controller_class = "App\\Controllers\\{$controller_name}";
-        
+
         if (file_exists($controller_file)) {
             require_once $controller_file;
-            
+
             if (class_exists($controller_class)) {
                 $controller = new $controller_class();
-                
+
                 if (method_exists($controller, $action)) {
                     // Verificar si la ruta requiere autenticación
                     $auth_middleware = new AuthMiddleware();
@@ -65,7 +67,7 @@ if (count($path_parts) > 0 && $path_parts[0] === $api_prefix) {
                         'solicitudes' => ['create', 'update', 'delete', 'cambiarEstado'],
                         'admin' => ['*']
                     ];
-                    
+
                     $requires_auth = false;
                     if (isset($path_parts[0]) && isset($protected_routes[$path_parts[0]])) {
                         if ($protected_routes[$path_parts[0]][0] === '*' || 
@@ -73,7 +75,7 @@ if (count($path_parts) > 0 && $path_parts[0] === $api_prefix) {
                             $requires_auth = true;
                         }
                     }
-                    
+
                     if ($requires_auth) {
                         $auth_result = $auth_middleware->handleRequest();
                         if (!$auth_result['success']) {
@@ -83,7 +85,7 @@ if (count($path_parts) > 0 && $path_parts[0] === $api_prefix) {
                         // Pasar el usuario autenticado al controlador
                         $controller->user = $auth_result['user'];
                     }
-                    
+
                     // Ejecutar la acción del controlador
                     call_user_func_array([$controller, $action], $params);
                 } else {
@@ -98,6 +100,11 @@ if (count($path_parts) > 0 && $path_parts[0] === $api_prefix) {
     } else {
         ResponseUtil::sendError("Ruta de API inválida", 404);
     }
+} else if (count($path_parts) > 0 && $path_parts[0] === 'test') {
+    // Ruta para probar la conexión a la base de datos
+    require_once 'controllers/TestController.php';
+    $testController = new \App\Controllers\TestController();
+    $testController->testDbConnection();
 } else {
     ResponseUtil::sendError("Ruta no encontrada", 404);
 }
