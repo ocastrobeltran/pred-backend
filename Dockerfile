@@ -11,7 +11,7 @@ WORKDIR /app
 COPY . .
 
 # Instalar dependencias con Composer
-RUN composer install --no-interaction --prefer-dist --optimize-autoloader
+RUN composer install --no-interaction --prefer-dist --optimize-autoloader && composer dump-autoload
 
 # Exponer el puerto
 EXPOSE 8000
