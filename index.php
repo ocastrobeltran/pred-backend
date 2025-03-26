@@ -1,18 +1,50 @@
 <?php
-require 'vendor/autoload.php';
+// Asegúrate de no tener NADA antes de esta línea, ni siquiera espacios en blanco
+ob_start(); // Iniciar buffer de salida para evitar problemas con headers
 
+// Habilitar reporte de errores
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-// Verificar la carga del autoload
+// Cargar el autoloader de Composer
 require_once __DIR__ . '/vendor/autoload.php';
 
-// Depuración de rutas y autoload
-echo '<pre>';
-echo 'Directorio actual: ' . __DIR__ . "\n";
-echo 'Archivos cargados: ' . implode("\n", get_included_files());
-echo '</pre>';
+// Cargar variables de entorno
+$dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
+$dotenv->load();
+
+// Depuración de namespaces (opcional, comentar en producción)
+function debugNamespaces() {
+    echo '<pre>';
+    echo "Directorios de autoload:\n";
+    
+    // Obtener directorios de autoload
+    $vendorDir = __DIR__ . '/vendor';
+    $composerDir = $vendorDir . '/composer';
+    
+    // Leer el archivo de autoload_psr4.php
+    $autoloadFile = $composerDir . '/autoload_psr4.php';
+    if (file_exists($autoloadFile)) {
+        $namespaces = require $autoloadFile;
+        print_r($namespaces);
+    }
+    
+    // Verificar clases existentes
+    echo "\nClases cargadas:\n";
+    $classes = get_declared_classes();
+    $appClasses = array_filter($classes, function($class) {
+        return strpos($class, 'App\\') === 0;
+    });
+    print_r($appClasses);
+    echo '</pre>';
+}
+
+// Descomentar para depuración
+// debugNamespaces();
+
+// Limpiar buffer de salida antes de continuar
+ob_end_clean();
 
 use App\Config\Database;
 use App\Middleware\AuthMiddleware;

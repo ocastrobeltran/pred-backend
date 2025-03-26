@@ -36,9 +36,6 @@ RUN a2enmod rewrite \
 # Configurar ServerName para suprimir la advertencia
 RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
-# Configurar archivo de configuración de Apache
-COPY apache-config.conf /etc/apache2/sites-available/000-default.conf
-
 # Exponer puerto
 EXPOSE 80
 
