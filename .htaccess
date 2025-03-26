@@ -1,4 +1,6 @@
 RewriteEngine On
+RewriteBase /
+
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ index.php [QSA,L]
@@ -7,3 +9,10 @@ RewriteRule ^(.*)$ index.php [QSA,L]
 Header set Access-Control-Allow-Origin "*"
 Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
 Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+
+# Ejemplo de configuración de headers (solo si es necesario)
+<IfModule mod_headers.c>
+    # Configuraciones de CORS o seguridad si son necesarias
+    # Header set X-Content-Type-Options "nosniff"
+    # Header set X-Frame-Options "SAMEORIGIN"
+</IfModule>

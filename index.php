@@ -1,10 +1,18 @@
 <?php
 require 'vendor/autoload.php';
 
-// Mostrar errores para depuración
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
+
+// Verificar la carga del autoload
+require_once __DIR__ . '/vendor/autoload.php';
+
+// Depuración de rutas y autoload
+echo '<pre>';
+echo 'Directorio actual: ' . __DIR__ . "\n";
+echo 'Archivos cargados: ' . implode("\n", get_included_files());
+echo '</pre>';
 
 use App\Config\Database;
 use App\Middleware\AuthMiddleware;

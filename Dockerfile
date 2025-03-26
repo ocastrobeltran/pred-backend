@@ -30,10 +30,17 @@ RUN composer dump-autoload -o
 RUN chown -R www-data:www-data /var/www/html
 
 # Habilitar módulos de Apache
-RUN a2enmod rewrite
+RUN a2enmod rewrite \
+    && a2enmod headers
+
+# Configurar ServerName para suprimir la advertencia
+RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
+
+# Configurar archivo de configuración de Apache
+COPY apache-config.conf /etc/apache2/sites-available/000-default.conf
 
 # Exponer puerto
-EXPOSE 8000
+EXPOSE 80
 
 # Comando para iniciar Apache
 CMD ["apache2-foreground"]
