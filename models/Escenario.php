@@ -601,4 +601,32 @@ class Escenario {
             'mensaje' => 'El escenario está disponible para el horario seleccionado'
         ];
     }
+
+    
+    public function registrarReserva($data) {
+        $query = "INSERT INTO reservas (escenario_id, fecha, hora_inicio, hora_fin, usuario_id)
+                  VALUES (:escenario_id, :fecha, :hora_inicio, :hora_fin, :usuario_id)";
+        $stmt = $this->conn->prepare($query);
+    
+        $stmt->bindParam(":escenario_id", $data['escenario_id'], PDO::PARAM_INT);
+        $stmt->bindParam(":fecha", $data['fecha'], PDO::PARAM_STR);
+        $stmt->bindParam(":hora_inicio", $data['hora_inicio'], PDO::PARAM_STR);
+        $stmt->bindParam(":hora_fin", $data['hora_fin'], PDO::PARAM_STR);
+        $stmt->bindParam(":usuario_id", $data['usuario_id'], PDO::PARAM_INT);
+    
+        return $stmt->execute();
+    }
+
+    public function obtenerHorasReservadas($escenario_id, $fecha) {
+        $query = "SELECT hora_inicio, hora_fin 
+                  FROM reservas 
+                  WHERE escenario_id = :escenario_id AND fecha = :fecha";
+        $stmt = $this->conn->prepare($query);
+
+        $stmt->bindParam(":escenario_id", $escenario_id, PDO::PARAM_INT);
+        $stmt->bindParam(":fecha", $fecha, PDO::PARAM_STR);
+        $stmt->execute();
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 }
