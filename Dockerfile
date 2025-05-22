@@ -1,33 +1,15 @@
-# Base image with PHP 8.2 and Composer
-FROM php:8.2-cli
+FROM node:18-alpine
 
-# Install Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
-# Install required extensions
-RUN apt-get update && \
-    apt-get install -y git zip unzip && \
-    docker-php-ext-install mysqli pdo pdo_mysql
-
-# Create app directory
 WORKDIR /app
 
-# Copy composer files first for better caching
-COPY composer.json composer.lock* ./
+COPY package*.json ./
 
-# Install dependencies
-RUN composer install --no-interaction --prefer-dist --optimize-autoloader
+RUN npm install
 
-# Copy the rest of the application
 COPY . .
 
-# Make sure the models directory is properly recognized
-RUN mkdir -p models && \
-    # Regenerate autoloader to ensure all classes are found
-    composer dump-autoload -o
+RUN npx prisma generate
 
-# Expose port
-EXPOSE 8000
+EXPOSE 3001
 
-# Command to start the server
-CMD php -S 0.0.0.0:8000 index.php
+CMD ["npm", "start"]
