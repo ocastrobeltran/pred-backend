@@ -1,0 +1,247 @@
+// This is your Prisma schema file
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Definir los modelos con los nombres de tabla correctos
+model Role {
+  id          Int      @id @default(autoincrement())
+  nombre      String   @unique
+  descripcion String?
+  usuarios    User[]
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("roles")
+}
+
+model User {
+  id                Int               @id @default(autoincrement())
+  nombre            String
+  apellido          String
+  email             String            @unique
+  password          String
+  cedula            String?           @unique
+  telefono          String?
+  direccion         String?
+  rolId             Int               @map("rol_id")
+  estado            String            @default("pendiente")
+  tokenVerificacion String?           @map("token_verificacion")
+  tokenExpiracion   DateTime?         @map("token_expiracion")
+  ultimoLogin       DateTime?         @map("ultimo_login")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  rol               Role              @relation(fields: [rolId], references: [id])
+  solicitudes       Request[]         @relation("UsuarioSolicitudes")
+  solicitudesAdmin  Request[]         @relation("AdminSolicitudes")
+  notificaciones    Notification[]
+  historial         StatusHistory[]
+
+  @@map("usuarios")
+}
+
+model Location {
+  id          Int       @id @default(autoincrement())
+  nombre      String    @unique
+  descripcion String?
+  escenarios  Scene[]
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime? @updatedAt @map("updated_at")
+
+  @@map("localidades")
+}
+
+model Sport {
+  id                Int          @id @default(autoincrement())
+  nombre            String       @unique
+  descripcion       String?
+  icono             String?
+  escenariosPrincipal Scene[]       @relation("DeportePrincipal")
+  escenarioDeportes SceneSport[]
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime?    @updatedAt @map("updated_at")
+
+  @@map("deportes")
+}
+
+model Amenity {
+  id                Int             @id @default(autoincrement())
+  nombre            String          @unique
+  descripcion       String?
+  icono             String?
+  escenarioAmenidades SceneAmenity[]
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime?       @updatedAt @map("updated_at")
+
+  @@map("amenidades")
+}
+
+model Scene {
+  id                 Int             @id @default(autoincrement())
+  nombre             String
+  descripcion        String?
+  capacidad          Int?
+  dimensiones        String?
+  localidadId        Int             @map("localidad_id")
+  deportePrincipalId Int             @map("deporte_principal_id")
+  direccion          String?
+  estado             String          @default("disponible")
+  imagenPrincipal    String?         @map("imagen_principal")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime?       @updatedAt @map("updated_at")
+  localidad          Location        @relation(fields: [localidadId], references: [id])
+  deportePrincipal   Sport           @relation("DeportePrincipal", fields: [deportePrincipalId], references: [id])
+  deportes           SceneSport[]
+  amenidades         SceneAmenity[]
+  imagenes           SceneImage[]
+  horarios           Schedule[]
+  solicitudes        Request[]
+
+  @@map("escenarios")
+}
+
+model SceneSport {
+  id          Int      @id @default(autoincrement())
+  escenarioId Int      @map("escenario_id")
+  deporteId   Int      @map("deporte_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  escenario   Scene    @relation(fields: [escenarioId], references: [id], onDelete: Cascade)
+  deporte     Sport    @relation(fields: [deporteId], references: [id], onDelete: Cascade)
+
+  @@map("escenario_deportes")
+}
+
+model SceneAmenity {
+  id          Int      @id @default(autoincrement())
+  escenarioId Int      @map("escenario_id")
+  amenidadId  Int      @map("amenidad_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  escenario   Scene    @relation(fields: [escenarioId], references: [id], onDelete: Cascade)
+  amenidad    Amenity  @relation(fields: [amenidadId], references: [id], onDelete: Cascade)
+
+  @@map("escenario_amenidades")
+}
+
+model SceneImage {
+  id          Int      @id @default(autoincrement())
+  escenarioId Int      @map("escenario_id")
+  urlImagen   String   @map("url_imagen")
+  esPrincipal Boolean  @default(false) @map("es_principal")
+  orden       Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  escenario   Scene    @relation(fields: [escenarioId], references: [id], onDelete: Cascade)
+
+  @@map("escenario_imagenes")
+}
+
+model Schedule {
+  id          Int      @id @default(autoincrement())
+  escenarioId Int      @map("escenario_id")
+  diaSemana   String   @map("dia_semana")
+  horaInicio  String   @map("hora_inicio")
+  horaFin     String   @map("hora_fin")
+  disponible  Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  escenario   Scene    @relation(fields: [escenarioId], references: [id], onDelete: Cascade)
+
+  @@map("horarios_disponibles")
+}
+
+model RequestStatus {
+  id                Int               @id @default(autoincrement())
+  nombre            String            @unique
+  descripcion       String?
+  color             String?
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime?         @updatedAt @map("updated_at")
+  solicitudes       Request[]
+  historialAnterior StatusHistory[]   @relation("EstadoAnterior")
+  historialNuevo    StatusHistory[]   @relation("EstadoNuevo")
+
+  @@map("estados_solicitud")
+}
+
+model Purpose {
+  id          Int       @id @default(autoincrement())
+  nombre      String    @unique
+  descripcion String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime? @updatedAt @map("updated_at")
+  solicitudes Request[]
+
+  @@map("propositos_reserva")
+}
+
+model Request {
+  id              Int            @id @default(autoincrement())
+  usuarioId       Int            @map("usuario_id")
+  escenarioId     Int            @map("escenario_id")
+  fechaReserva    DateTime       @map("fecha_reserva")
+  horaInicio      String         @map("hora_inicio")
+  horaFin         String         @map("hora_fin")
+  propositoId     Int            @map("proposito_id")
+  numParticipantes Int           @map("num_participantes")
+  estadoId        Int            @map("estado_id")
+  notas           String?
+  adminId         Int?           @map("admin_id")
+  adminNotas      String?        @map("admin_notas")
+  fechaRespuesta  DateTime?      @map("fecha_respuesta")
+  codigoReserva   String         @unique @map("codigo_reserva")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+  usuario         User           @relation("UsuarioSolicitudes", fields: [usuarioId], references: [id])
+  escenario       Scene          @relation(fields: [escenarioId], references: [id])
+  proposito       Purpose        @relation(fields: [propositoId], references: [id])
+  estado          RequestStatus  @relation(fields: [estadoId], references: [id])
+  admin           User?          @relation("AdminSolicitudes", fields: [adminId], references: [id])
+  historial       StatusHistory[]
+
+  @@map("solicitudes")
+}
+
+model StatusHistory {
+  id               Int           @id @default(autoincrement())
+  solicitudId      Int           @map("solicitud_id")
+  estadoAnteriorId Int?          @map("estado_anterior_id")
+  estadoNuevoId    Int           @map("estado_nuevo_id")
+  usuarioId        Int           @map("usuario_id")
+  notas            String?
+  createdAt        DateTime      @default(now()) @map("created_at")
+  solicitud        Request       @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  estadoAnterior   RequestStatus? @relation("EstadoAnterior", fields: [estadoAnteriorId], references: [id])
+  estadoNuevo      RequestStatus @relation("EstadoNuevo", fields: [estadoNuevoId], references: [id])
+  usuario          User          @relation(fields: [usuarioId], references: [id])
+
+  @@map("historial_estados_solicitud")
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  usuarioId Int      @map("usuario_id")
+  titulo    String
+  mensaje   String
+  tipo      String   @default("info")
+  leida     Boolean  @default(false)
+  url       String?
+  createdAt DateTime @default(now()) @map("created_at")
+  usuario   User     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("notificaciones")
+}
+
+model Config {
+  id          Int       @id @default(autoincrement())
+  clave       String    @unique
+  valor       String?
+  descripcion String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime? @updatedAt @map("updated_at")
+
+  @@map("configuracion")
+}
