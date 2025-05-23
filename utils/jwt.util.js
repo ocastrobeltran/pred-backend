@@ -66,6 +66,6 @@ export const verifyPasswordResetToken = (token) => {
 }
 
 // Generar token aleatorio
-export const generateRandomToken = (length = 32) => {
+export const generateToken32 = (length = 32) => {
   return crypto.randomBytes(length).toString("hex")
 }
