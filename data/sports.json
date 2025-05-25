@@ -1,0 +1,56 @@
+[
+  {
+    "id": 1,
+    "nombre": "Fútbol",
+    "descripcion": "Fútbol 11",
+    "icono": "football"
+  },
+  {
+    "id": 2,
+    "nombre": "Baloncesto",
+    "descripcion": "Baloncesto",
+    "icono": "basketball"
+  },
+  {
+    "id": 3,
+    "nombre": "Voleibol",
+    "descripcion": "Voleibol",
+    "icono": "volleyball"
+  },
+  {
+    "id": 4,
+    "nombre": "Tenis",
+    "descripcion": "Tenis",
+    "icono": "tennis"
+  },
+  {
+    "id": 5,
+    "nombre": "Natación",
+    "descripcion": "Natación",
+    "icono": "swimming"
+  },
+  {
+    "id": 6,
+    "nombre": "Béisbol",
+    "descripcion": "Béisbol",
+    "icono": "baseball"
+  },
+  {
+    "id": 7,
+    "nombre": "Softbol",
+    "descripcion": "Softbol",
+    "icono": "softball"
+  },
+  {
+    "id": 8,
+    "nombre": "Patinaje",
+    "descripcion": "Patinaje",
+    "icono": "skating"
+  },
+  {
+    "id": 9,
+    "nombre": "Atletismo",
+    "descripcion": "Atletismo",
+    "icono": "athletics"
+  }
+]

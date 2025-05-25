@@ -1,4 +1,4 @@
-import express from 'express';
+import express from "express"
 import {
   getAllScenes,
   getSceneById,
@@ -9,38 +9,28 @@ import {
   getSports,
   getAmenities,
   checkAvailability,
-  getReservedHours
-} from '../controllers/scene.controller.js';
-import { authenticate, isAdmin } from '../middlewares/auth.middleware.js';
-import { validate, validateParams } from '../middlewares/validation.middleware.js';
-import { sceneSchema, sceneIdSchema } from '../utils/validation.util.js';
+  getReservedHours,
+} from "../controllers/scene.controller.js"
+import { authenticate, isAdmin } from "../middlewares/auth.middleware.js"
+import { validate, validateParams } from "../middlewares/validation.middleware.js"
+import { sceneSchema, sceneIdSchema } from "../utils/validation.util.js"
 
-const router = express.Router();
+const router = express.Router()
 
-// Rutas públicas
-router.get('/', getAllScenes);
-router.get('/locations', getLocations);
-router.get('/sports', getSports);
-router.get('/amenities', getAmenities);
-router.get('/:id', validateParams(sceneIdSchema), getSceneById);
-router.get('/:id/reserved-hours', validateParams(sceneIdSchema), getReservedHours);
+// Rutas públicas (sin autenticación)
+router.get("/", getAllScenes)
+router.get("/localidades", getLocations)
+router.get("/deportes", getSports)
+router.get("/amenidades", getAmenities)
+router.get("/:id", validateParams(sceneIdSchema), getSceneById) // Esta es la ruta correcta
+router.get("/:id/horas-reservadas", validateParams(sceneIdSchema), getReservedHours)
 
-// Alias para compatibilidad con el frontend
-router.get('/localidades', getLocations);
-router.get('/deportes', getSports);
-router.get('/amenidades', getAmenities);
-router.get('/view/:id', validateParams(sceneIdSchema), getSceneById);
+// Rutas que requieren autenticación
+router.post("/verificar-disponibilidad", authenticate, checkAvailability)
 
-// Rutas protegidas por autenticación
-router.use(authenticate);
+// Rutas que requieren autenticación de admin
+router.post("/", authenticate, isAdmin, validate(sceneSchema), createScene)
+router.put("/:id", authenticate, isAdmin, validateParams(sceneIdSchema), updateScene)
+router.delete("/:id", authenticate, isAdmin, validateParams(sceneIdSchema), deleteScene)
 
-// Verificar disponibilidad
-router.post('/check-availability', checkAvailability);
-router.post('/verificar-disponibilidad', checkAvailability); // Alias en español
-
-// Rutas para administradores
-router.post('/', isAdmin, validate(sceneSchema), createScene);
-router.put('/:id', isAdmin, validateParams(sceneIdSchema), updateScene);
-router.delete('/:id', isAdmin, validateParams(sceneIdSchema), deleteScene);
-
-export default router;
+export default router

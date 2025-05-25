@@ -50,13 +50,21 @@ testConnection()
     console.error("Error al verificar conexión a la base de datos:", error)
   })
 
-// Rutas
+// Rutas en inglés (mantenemos compatibilidad)
 app.use("/api/auth", authRoutes)
 app.use("/api/users", userRoutes)
 app.use("/api/scenes", sceneRoutes)
 app.use("/api/requests", requestRoutes)
 app.use("/api/notifications", notificationRoutes)
 app.use("/api/files", fileRoutes)
+
+// Rutas en español (para compatibilidad con el frontend)
+app.use("/api/autenticacion", authRoutes)
+app.use("/api/usuarios", userRoutes)
+app.use("/api/escenarios", sceneRoutes)
+app.use("/api/solicitudes", requestRoutes)
+app.use("/api/notificaciones", notificationRoutes)
+app.use("/api/archivos", fileRoutes)
 
 // Ruta de prueba
 app.get("/api/health", (req, res) => {
