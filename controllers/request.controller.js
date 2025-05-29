@@ -411,21 +411,21 @@ export const createRequest = async (req, res) => {
     const diasSemana = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"]
     const diaSemana = diasSemana[dayOfWeek]
 
-    const horarioDisponibleQuery = await query(
-      `
-      SELECT id FROM horarios_disponibles
-      WHERE escenario_id = $1
-      AND dia_semana = $2
-      AND hora_inicio <= $3
-      AND hora_fin >= $4
-      AND disponible = true
-    `,
-      [escenarioId, diaSemana, hora_inicio, hora_fin],
-    )
+    // const horarioDisponibleQuery = await query(
+    //   `
+    //   SELECT id FROM horarios_disponibles
+    //   WHERE escenario_id = $1
+    //   AND dia_semana = $2
+    //   AND hora_inicio <= $3
+    //   AND hora_fin >= $4
+    //   AND disponible = true
+    // `,
+    //   [escenarioId, diaSemana, hora_inicio, hora_fin],
+    // )
 
-    if (horarioDisponibleQuery.rows.length === 0) {
-      return sendError(res, "El horario seleccionado no está disponible para este escenario", 400)
-    }
+    // if (horarioDisponibleQuery.rows.length === 0) {
+    //   return sendError(res, "El horario seleccionado no está disponible para este escenario", 400)
+    // }
 
     // Verificar si ya existe una solicitud aprobada para ese horario
     const solicitudExistenteQuery = await query(
@@ -587,6 +587,38 @@ export const createRequest = async (req, res) => {
     }
   } catch (error) {
     console.error("Error en createRequest:", error)
+    return sendError(res, "Error en el servidor", 500)
+  }
+}
+
+export const verificarDisponibilidad = async (req, res) => {
+  try {
+    const { escenario_id, fecha, hora_inicio, hora_fin } = req.body
+
+    // Buscar si existe una reserva aprobada que traslape
+    const result = await query(
+      `
+      SELECT id
+      FROM solicitudes
+      WHERE escenario_id = $1
+        AND fecha_reserva = $2
+        AND estado_id = 3
+        AND (
+          (hora_inicio <= $4 AND hora_fin >= $3)
+        )
+      `,
+      [escenario_id, fecha, hora_inicio, hora_fin]
+    )
+
+    const disponible = result.rows.length === 0
+
+    return sendResponse(
+      res,
+      { disponible },
+      disponible ? "Horario disponible" : "Horario no disponible"
+    )
+  } catch (error) {
+    console.error("Error en verificarDisponibilidad:", error)
     return sendError(res, "Error en el servidor", 500)
   }
 }
@@ -763,6 +795,118 @@ export const getRequestPurposes = async (req, res) => {
     return sendResponse(res, purposesQuery.rows, "Propósitos obtenidos exitosamente")
   } catch (error) {
     console.error("Error en getRequestPurposes:", error)
+    return sendError(res, "Error en el servidor", 500)
+  }
+}
+
+export const getAvailableDays = async (req, res) => {
+  try {
+    let { escenario_id, desde, hasta } = req.query
+
+    if (!escenario_id || !desde || !hasta) {
+      return sendError(res, "Error de validación en parámetros", 400, [
+        "escenario_id, desde y hasta son requeridos"
+      ])
+    }
+
+    escenario_id = Number.parseInt(escenario_id)
+    if (isNaN(escenario_id)) {
+      return sendError(res, "Error de validación en parámetros", 400, ["El ID debe ser un número"])
+    }
+    const availableHours = [
+      "08:00:00",
+      "10:00:00",
+      "12:00:00",
+      "14:00:00",
+      "16:00:00",
+      "18:00:00",
+    ]
+
+    // Obtener todas las reservas aprobadas en el rango
+    const reservasQuery = await query(
+      `
+      SELECT fecha_reserva, hora_inicio, hora_fin
+      FROM solicitudes
+      WHERE escenario_id = $1
+        AND fecha_reserva BETWEEN $2 AND $3
+        AND estado_id = 3
+      `,
+      [escenario_id, desde, hasta]
+    )
+
+    // Agrupar reservas por fecha
+    const reservasPorFecha = {}
+    reservasQuery.rows.forEach(r => {
+      const fecha = r.fecha_reserva.toISOString().slice(0, 10)
+      if (!reservasPorFecha[fecha]) reservasPorFecha[fecha] = []
+      reservasPorFecha[fecha].push({ inicio: r.hora_inicio, fin: r.hora_fin })
+    })
+
+    // Generar fechas del rango
+    const fechas = []
+    let d = new Date(desde)
+    const end = new Date(hasta)
+    while (d <= end) {
+      fechas.push(d.toISOString().slice(0, 10))
+      d.setDate(d.getDate() + 1)
+    }
+
+    // Para cada fecha, verificar si hay al menos un horario libre
+    const diasDisponibles = fechas.filter(fecha => {
+      const reservas = reservasPorFecha[fecha] || []
+      // Para cada horario, verificar si está libre
+      return availableHours.some(hora => {
+        return !reservas.some(r =>
+          (hora >= r.inicio && hora < r.fin)
+        )
+      })
+    })
+
+    return sendResponse(res, diasDisponibles, "Días disponibles obtenidos exitosamente")
+  } catch (error) {
+    console.error("Error en getAvailableDays:", error)
+    return sendError(res, "Error en el servidor", 500)
+  }
+}
+
+export const getAvailableHours = async (req, res) => {
+  try {
+    let { escenario_id, fecha } = req.query
+    escenario_id = Number.parseInt(escenario_id)
+    if (isNaN(escenario_id)) {
+      return sendError(res, "Error de validación en parámetros", 400, ["El ID debe ser un número"])
+    }
+
+    const availableHours = [
+      "08:00:00",
+      "10:00:00",
+      "12:00:00",
+      "14:00:00",
+      "16:00:00",
+      "18:00:00",
+    ]
+
+    const reservasQuery = await query(
+      `
+      SELECT hora_inicio, hora_fin
+      FROM solicitudes
+      WHERE escenario_id = $1
+        AND fecha_reserva = $2
+        AND estado_id = 3
+      `,
+      [escenario_id, fecha]
+    )
+
+    const booked = reservasQuery.rows
+
+    // Filtrar horarios ocupados
+    const freeHours = availableHours.filter(hora =>
+      !booked.some(r => hora >= r.hora_inicio && hora < r.hora_fin)
+    )
+
+    return sendResponse(res, freeHours, "Horas disponibles obtenidas exitosamente")
+  } catch (error) {
+    console.error("Error en getAvailableHours:", error)
     return sendError(res, "Error en el servidor", 500)
   }
 }

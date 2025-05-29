@@ -8,9 +8,9 @@ import {
   getLocations,
   getSports,
   getAmenities,
-  checkAvailability,
   getReservedHours,
 } from "../controllers/scene.controller.js"
+import { verificarDisponibilidad, getAvailableDays, getAvailableHours } from "../controllers/request.controller.js"
 import { authenticate, isAdmin } from "../middlewares/auth.middleware.js"
 import { validate, validateParams } from "../middlewares/validation.middleware.js"
 import { sceneSchema, sceneIdSchema } from "../utils/validation.util.js"
@@ -22,11 +22,21 @@ router.get("/", getAllScenes)
 router.get("/localidades", getLocations)
 router.get("/deportes", getSports)
 router.get("/amenidades", getAmenities)
-router.get("/:id", validateParams(sceneIdSchema), getSceneById) // Esta es la ruta correcta
+
+// Días disponibles para un escenario en un rango de fechas
+router.get("/dias-disponibles", getAvailableDays)
+
+// Horas disponibles para un escenario y fecha
+router.get("/horas-disponibles", getAvailableHours)
+
+// Verificar disponibilidad para un horario específico
+router.post("/verificar-disponibilidad", verificarDisponibilidad)
+
+router.get("/:id", validateParams(sceneIdSchema), getSceneById)
 router.get("/:id/horas-reservadas", validateParams(sceneIdSchema), getReservedHours)
 
 // Rutas que requieren autenticación
-router.post("/verificar-disponibilidad", authenticate, checkAvailability)
+router.post("/disponibilidad", authenticate, verificarDisponibilidad)
 
 // Rutas que requieren autenticación de admin
 router.post("/", authenticate, isAdmin, validate(sceneSchema), createScene)

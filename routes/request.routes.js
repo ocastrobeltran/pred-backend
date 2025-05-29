@@ -15,12 +15,13 @@ import { requestSchema, requestIdSchema, statusChangeSchema, reservationCodeSche
 const router = express.Router()
 
 // Rutas protegidas
+router.get("/propositos", authenticate, getRequestPurposes)
+router.get("/estados", authenticate, getRequestStatuses)
+router.get("/buscar", authenticate, validateQuery(reservationCodeSchema), findByReservationCode)
 router.get("/", authenticate, getAllRequests)
 router.get("/:id", authenticate, validateParams(requestIdSchema), getRequestById)
 router.post("/", authenticate, validate(requestSchema), createRequest)
-router.get("/buscar", authenticate, validateQuery(reservationCodeSchema), findByReservationCode)
-router.get("/estados", authenticate, getRequestStatuses)
-router.get("/propositos", authenticate, getRequestPurposes)
+
 
 // Rutas protegidas por supervisor o admin
 router.put(
