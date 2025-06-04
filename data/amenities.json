@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "nombre": "Estacionamiento",
+    "descripcion": "Área de estacionamiento",
+    "icono": "parking"
+  },
+  {
+    "id": 2,
+    "nombre": "Vestuarios",
+    "descripcion": "Vestuarios con duchas",
+    "icono": "shower"
+  },
+  {
+    "id": 3,
+    "nombre": "Cafetería",
+    "descripcion": "Servicio de cafetería",
+    "icono": "coffee"
+  },
+  {
+    "id": 4,
+    "nombre": "Iluminación",
+    "descripcion": "Iluminación nocturna",
+    "icono": "lightbulb"
+  },
+  {
+    "id": 5,
+    "nombre": "Gradas",
+    "descripcion": "Gradas para espectadores",
+    "icono": "users"
+  }
+]

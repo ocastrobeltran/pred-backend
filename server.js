@@ -5,6 +5,7 @@ import { testConnection } from "./config/database.js"
 import path from "path"
 import { fileURLToPath } from "url"
 import { errorHandler } from "./middlewares/error.middleware.js"
+import debugRoutes from "./routes/debug.routes.js"
 
 // Importar rutas
 import authRoutes from "./routes/auth.routes.js"
@@ -25,8 +26,19 @@ const __dirname = path.dirname(__filename)
 const app = express()
 const PORT = process.env.PORT || 3001
 
+const corsOptions = {
+  origin: [
+    'http://localhost:3000',
+    'https://pred-opo4.onrender.com',
+    process.env.FRONTEND_URL
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}
+
 // Middleware
-app.use(cors())
+app.use(cors(corsOptions))
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
@@ -50,13 +62,21 @@ testConnection()
     console.error("Error al verificar conexión a la base de datos:", error)
   })
 
-// Rutas
+// Rutas en inglés (mantenemos compatibilidad)
 app.use("/api/auth", authRoutes)
 app.use("/api/users", userRoutes)
 app.use("/api/scenes", sceneRoutes)
 app.use("/api/requests", requestRoutes)
 app.use("/api/notifications", notificationRoutes)
 app.use("/api/files", fileRoutes)
+
+// Rutas en español (para compatibilidad con el frontend)
+app.use("/api/autenticacion", authRoutes)
+app.use("/api/usuarios", userRoutes)
+app.use("/api/escenarios", sceneRoutes)
+app.use("/api/solicitudes", requestRoutes)
+app.use("/api/notificaciones", notificationRoutes)
+app.use("/api/archivos", fileRoutes)
 
 // Ruta de prueba
 app.get("/api/health", (req, res) => {
@@ -65,6 +85,9 @@ app.get("/api/health", (req, res) => {
 
 // Middleware de manejo de errores
 app.use(errorHandler)
+
+// Rutas de depuración (solo para desarrollo)
+app.use("/api/debug", debugRoutes)
 
 // Iniciar servidor
 app.listen(PORT, () => {

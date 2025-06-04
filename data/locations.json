@@ -1,0 +1,22 @@
+[
+  {
+    "id": 1,
+    "nombre": "Centro",
+    "descripcion": "Zona centro de la ciudad"
+  },
+  {
+    "id": 2,
+    "nombre": "Olaya Herrera",
+    "descripcion": "Barrio Olaya Herrera"
+  },
+  {
+    "id": 3,
+    "nombre": "Chiquinquirá",
+    "descripcion": "Barrio Chiquinquirá"
+  },
+  {
+    "id": 4,
+    "nombre": "El Campestre",
+    "descripcion": "Zona El Campestre"
+  }
+]

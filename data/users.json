@@ -1,0 +1,16 @@
+[
+  {
+    "id": 1,
+    "nombre": "Admin",
+    "apellido": "Sistema",
+    "email": "admin@example.com",
+    "password": "$2b$10$XOPbrlUPQdwdJUpSrIF6X.LbE14qsMmKGq/zKrwgz/B0FVqxqckb6",
+    "cedula": "1234567890",
+    "telefono": "3001234567",
+    "direccion": "Calle Principal #123",
+    "rolId": 1,
+    "estado": "activo",
+    "createdAt": "2025-05-25T00:53:08.701Z",
+    "updatedAt": "2025-05-25T00:53:08.706Z"
+  }
+]

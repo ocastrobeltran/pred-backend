@@ -1,0 +1,27 @@
+[
+  {
+    "id": 1,
+    "nombre": "Evento deportivo",
+    "descripcion": "Competencia o evento deportivo organizado"
+  },
+  {
+    "id": 2,
+    "nombre": "Entrenamiento",
+    "descripcion": "Sesión de entrenamiento deportivo"
+  },
+  {
+    "id": 3,
+    "nombre": "Competencia",
+    "descripcion": "Competencia deportiva oficial"
+  },
+  {
+    "id": 4,
+    "nombre": "Recreación",
+    "descripcion": "Actividad recreativa"
+  },
+  {
+    "id": 5,
+    "nombre": "Clase",
+    "descripcion": "Clase o curso deportivo"
+  }
+]

@@ -1,9 +1,7 @@
 import bcrypt from "bcrypt"
 import jwt from "jsonwebtoken"
 import { query } from "../config/database.js"
-import { sendResponse, sendError } from "../utils/response.util.js"
-import { sendVerificationEmail } from "../services/email.service.js"
-import { generateToken } from "../utils/jwt.util.js"
+import { sendResponse, sendError, formatUserData } from "../utils/response.util.js"
 
 // Registro de usuario
 export const register = async (req, res) => {
@@ -37,45 +35,41 @@ export const register = async (req, res) => {
     }
 
     const userRoleId = userRoleQuery.rows[0].id
-    const verificationToken = generateToken(32)
-    const tokenExpiration = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 horas
 
-    // Crear usuario
+    // Crear usuario - Ahora con estado "activo" directamente
     const userQuery = await query(
       `
       INSERT INTO usuarios (
         nombre, apellido, email, password, cedula, telefono, direccion,
-        rol_id, estado, token_verificacion, token_expiracion, created_at, updated_at
+        rol_id, estado, created_at, updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
       RETURNING id, nombre, apellido, email, cedula, telefono, direccion, rol_id, estado, created_at
     `,
-      [
-        nombre,
-        apellido,
-        email,
-        hashedPassword,
-        cedula,
-        telefono,
-        direccion,
-        userRoleId,
-        "pendiente",
-        verificationToken,
-        tokenExpiration,
-      ],
+      [nombre, apellido, email, hashedPassword, cedula, telefono, direccion || "", userRoleId, "activo"],
     )
 
     const user = userQuery.rows[0]
-
-    // Enviar email de verificación
-    await sendVerificationEmail(email, verificationToken)
 
     // Generar token JWT
     const token = jwt.sign({ id: user.id, email: user.email, role: "usuario" }, process.env.JWT_SECRET, {
       expiresIn: "24h",
     })
 
-    return sendResponse(res, { token, user }, "Usuario registrado exitosamente. Por favor verifica tu email.")
+    // Formatear datos del usuario para la respuesta
+    const userData = formatUserData(user)
+
+    return sendResponse(
+      res,
+      {
+        token,
+        user: {
+          ...userData,
+          rol_nombre: "usuario",
+        },
+      },
+      "Usuario registrado exitosamente.",
+    )
   } catch (error) {
     console.error("Error en register:", error)
     return sendError(res, "Error en el servidor", 500)
@@ -130,12 +124,17 @@ export const login = async (req, res) => {
       expiresIn: "24h",
     })
 
-    // Eliminar datos sensibles
-    delete user.password
-    delete user.token_verificacion
-    delete user.token_expiracion
+    // Formatear datos del usuario para la respuesta
+    const userData = formatUserData(user)
 
-    return sendResponse(res, { token, user }, "Login exitoso")
+    return sendResponse(
+      res,
+      {
+        token,
+        user: userData,
+      },
+      "Login exitoso",
+    )
   } catch (error) {
     console.error("Error en login:", error)
     return sendError(res, "Error en el servidor", 500)
@@ -163,12 +162,10 @@ export const getCurrentUser = async (req, res) => {
 
     const user = userQuery.rows[0]
 
-    // Eliminar datos sensibles
-    delete user.password
-    delete user.token_verificacion
-    delete user.token_expiracion
+    // Formatear datos del usuario para la respuesta
+    const userData = formatUserData(user)
 
-    return sendResponse(res, user, "Usuario obtenido exitosamente")
+    return sendResponse(res, userData, "Usuario obtenido exitosamente")
   } catch (error) {
     console.error("Error en getCurrentUser:", error)
     return sendError(res, "Error en el servidor", 500)
@@ -220,7 +217,7 @@ export const requestPasswordReset = async (req, res) => {
 
     const userQuery = await query(
       `
-      SELECT id
+      SELECT id, nombre
       FROM usuarios
       WHERE email = $1
     `,
@@ -231,27 +228,8 @@ export const requestPasswordReset = async (req, res) => {
       return sendError(res, "No existe un usuario con ese email", 404)
     }
 
-    const userId = userQuery.rows[0].id
-
-    // Generar token de restablecimiento
-    const resetToken = generateToken(32)
-    const resetExpiration = new Date(Date.now() + 1 * 60 * 60 * 1000) // 1 hora
-
-    // Actualizar usuario con token
-    await query(
-      `
-      UPDATE usuarios
-      SET token_verificacion = $1, token_expiracion = $2
-      WHERE id = $3
-    `,
-      [resetToken, resetExpiration, userId],
-    )
-
-    // Enviar email con token
-    // TODO: Implementar función para enviar email de restablecimiento
-    // await sendPasswordResetEmail(email, resetToken);
-
-    return sendResponse(res, null, "Se ha enviado un email con instrucciones para restablecer tu contraseña")
+    // Como no podemos enviar emails, simplemente informamos al usuario que contacte al administrador
+    return sendResponse(res, null, "Por favor, contacta al administrador para restablecer tu contraseña.")
   } catch (error) {
     console.error("Error en requestPasswordReset:", error)
     return sendError(res, "Error en el servidor", 500)

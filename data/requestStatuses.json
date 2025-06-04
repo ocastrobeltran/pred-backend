@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "nombre": "pendiente",
+    "descripcion": "Solicitud pendiente de revisión",
+    "color": "yellow"
+  },
+  {
+    "id": 2,
+    "nombre": "aprobada",
+    "descripcion": "Solicitud aprobada",
+    "color": "green"
+  },
+  {
+    "id": 3,
+    "nombre": "rechazada",
+    "descripcion": "Solicitud rechazada",
+    "color": "red"
+  },
+  {
+    "id": 4,
+    "nombre": "completada",
+    "descripcion": "Reserva completada",
+    "color": "blue"
+  }
+]

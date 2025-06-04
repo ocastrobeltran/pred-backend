@@ -1,0 +1,44 @@
+[
+  {
+    "id": 1,
+    "nombre": "Estadio Jaime Morón",
+    "descripcion": "El Estadio Jaime Morón León es el principal escenario deportivo para la práctica del fútbol en la ciudad de Cartagena. Cuenta con una capacidad para 16.000 espectadores, césped natural y graderías techadas.",
+    "capacidad": 16000,
+    "dimensiones": "105m x 68m",
+    "localidadId": 2,
+    "deportePrincipalId": 1,
+    "direccion": "Barrio Olaya Herrera, Cartagena",
+    "estado": "disponible",
+    "imagenPrincipal": null,
+    "createdAt": "2025-05-25T00:53:08.706Z",
+    "updatedAt": "2025-05-25T00:53:08.706Z"
+  },
+  {
+    "id": 2,
+    "nombre": "Estadio de Béisbol Once de Noviembre",
+    "descripcion": "Estadio de béisbol con capacidad para 12.000 espectadores, iluminación nocturna y palcos VIP.",
+    "capacidad": 12000,
+    "dimensiones": "120m x 120m",
+    "localidadId": 1,
+    "deportePrincipalId": 6,
+    "direccion": "Centro, Cartagena",
+    "estado": "disponible",
+    "imagenPrincipal": null,
+    "createdAt": "2025-05-25T00:53:08.706Z",
+    "updatedAt": "2025-05-25T00:53:08.706Z"
+  },
+  {
+    "id": 3,
+    "nombre": "Complejo Acuático Jaime González Johnson",
+    "descripcion": "Complejo con piscina olímpica de 50 metros, piscina de clavados y áreas de entrenamiento.",
+    "capacidad": 1000,
+    "dimensiones": "50m x 25m",
+    "localidadId": 1,
+    "deportePrincipalId": 5,
+    "direccion": "Centro, Cartagena",
+    "estado": "disponible",
+    "imagenPrincipal": null,
+    "createdAt": "2025-05-25T00:53:08.706Z",
+    "updatedAt": "2025-05-25T00:53:08.706Z"
+  }
+]

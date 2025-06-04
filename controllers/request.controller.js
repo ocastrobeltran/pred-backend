@@ -12,6 +12,8 @@ export const getAllRequests = async (req, res) => {
     const userRole = req.user.role
     const userId = req.user.id
 
+    console.log(`🔍 getAllRequests - Usuario: ${userId}, Rol: ${userRole}`)
+
     // Construir la consulta base
     let queryText = `
       SELECT s.*, 
@@ -38,13 +40,21 @@ export const getAllRequests = async (req, res) => {
     const queryParams = []
     let paramIndex = 1
 
-    // Si no es administrador o supervisor, solo puede ver sus propias solicitudes
-    if (userRole !== "admin" && userRole !== "supervisor") {
+    // ✅ CORRECCIÓN CRÍTICA: Administradores y supervisores ven TODAS las solicitudes por defecto
+    if (userRole !== "admin" && userRole !== "administrador" && userRole !== "supervisor") {
+      // Solo usuarios normales ven únicamente sus propias solicitudes
+      console.log(`👤 Usuario normal - Solo verá sus propias solicitudes`)
       queryText += ` AND s.usuario_id = $${paramIndex++}`
       queryParams.push(userId)
-    } else if (usuario_id) {
-      queryText += ` AND s.usuario_id = $${paramIndex++}`
-      queryParams.push(Number.parseInt(usuario_id))
+    } else {
+      console.log(`👑 Admin/Supervisor - Verá TODAS las solicitudes`)
+      // Administradores y supervisores ven todas las solicitudes
+      // Solo filtrar por usuario_id si se especifica explícitamente
+      if (usuario_id) {
+        console.log(`🔍 Filtro específico por usuario: ${usuario_id}`)
+        queryText += ` AND s.usuario_id = $${paramIndex++}`
+        queryParams.push(Number.parseInt(usuario_id))
+      }
     }
 
     if (escenario_id) {
@@ -74,7 +84,10 @@ export const getAllRequests = async (req, res) => {
     }
 
     // Añadir ordenamiento
-    queryText += ` ORDER BY s.fecha_reserva DESC, s.hora_inicio ASC`
+    queryText += ` ORDER BY s.created_at DESC, s.fecha_reserva DESC`
+
+    console.log(`📋 Query final:`, queryText)
+    console.log(`📋 Parámetros:`, queryParams)
 
     // Consulta para contar el total de registros
     const countQuery = `SELECT COUNT(*) FROM (${queryText}) AS count_query`
@@ -91,6 +104,8 @@ export const getAllRequests = async (req, res) => {
 
     const requests = requestsResult.rows
     const total = Number.parseInt(countResult.rows[0].count)
+
+    console.log(`📊 Solicitudes encontradas: ${requests.length} de ${total} total`)
 
     // Formatear datos para la respuesta
     const formattedRequests = requests.map((request) => ({
@@ -133,6 +148,8 @@ export const getAllRequests = async (req, res) => {
       created_at: request.created_at,
     }))
 
+    console.log(`✅ Respuesta formateada con ${formattedRequests.length} solicitudes`)
+
     return sendResponse(
       res,
       {
@@ -147,7 +164,7 @@ export const getAllRequests = async (req, res) => {
       "Solicitudes obtenidas exitosamente",
     )
   } catch (error) {
-    console.error("Error en getAllRequests:", error)
+    console.error("❌ Error en getAllRequests:", error)
     return sendError(res, "Error en el servidor", 500)
   }
 }
@@ -192,8 +209,13 @@ export const getRequestById = async (req, res) => {
 
     const request = requestQuery.rows[0]
 
-    // Verificar permisos (solo el propio usuario o un administrador/supervisor puede ver los detalles)
-    if (request.usuario_id !== userId && userRole !== "admin" && userRole !== "supervisor") {
+    // ✅ CORRECCIÓN: Administradores y supervisores pueden ver cualquier solicitud
+    if (
+      request.usuario_id !== userId &&
+      userRole !== "admin" &&
+      userRole !== "administrador" &&
+      userRole !== "supervisor"
+    ) {
       return sendError(res, "No tienes permisos para realizar esta acción", 403)
     }
 
@@ -384,6 +406,15 @@ export const createRequest = async (req, res) => {
     const { escenario_id, fecha_reserva, hora_inicio, hora_fin, proposito_id, num_participantes, notas } = req.body
     const userId = req.user.id
 
+    console.log("🆕 createRequest - Datos recibidos:", {
+      escenario_id,
+      fecha_reserva,
+      hora_inicio,
+      hora_fin,
+      proposito_id,
+      num_participantes,
+    })
+
     // Validar datos
     const requiredFields = [
       "escenario_id",
@@ -404,38 +435,16 @@ export const createRequest = async (req, res) => {
       )
     }
 
-    // Verificar disponibilidad
     const escenarioId = Number.parseInt(escenario_id)
-    const date = new Date(fecha_reserva)
-    const dayOfWeek = date.getDay()
-    const diasSemana = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"]
-    const diaSemana = diasSemana[dayOfWeek]
 
-    const horarioDisponibleQuery = await query(
-      `
-      SELECT id FROM horarios_disponibles
-      WHERE escenario_id = $1
-      AND dia_semana = $2
-      AND hora_inicio <= $3
-      AND hora_fin >= $4
-      AND disponible = true
-    `,
-      [escenarioId, diaSemana, hora_inicio, hora_fin],
-    )
-
-    if (horarioDisponibleQuery.rows.length === 0) {
-      return sendError(res, "El horario seleccionado no está disponible para este escenario", 400)
-    }
-
-    // Verificar si ya existe una solicitud aprobada para ese horario
+    // ✅ VALIDACIÓN CRÍTICA: Verificar si ya existe una solicitud aprobada para ese horario
     const solicitudExistenteQuery = await query(
       `
-      SELECT s.id
+      SELECT s.id, s.codigo_reserva
       FROM solicitudes s
-      JOIN estados_solicitud es ON s.estado_id = es.id
       WHERE s.escenario_id = $1
       AND s.fecha_reserva = $2
-      AND es.nombre = 'aprobada'
+      AND s.estado_id = 3
       AND (
         (s.hora_inicio <= $3 AND s.hora_fin > $3) OR
         (s.hora_inicio < $4 AND s.hora_fin >= $4) OR
@@ -446,23 +455,54 @@ export const createRequest = async (req, res) => {
     )
 
     if (solicitudExistenteQuery.rows.length > 0) {
+      console.log("🚫 Conflicto detectado - Reserva existente:", solicitudExistenteQuery.rows[0])
       return sendError(res, "Ya existe una reserva aprobada para este escenario en el horario seleccionado", 400)
     }
 
     // Generar código único de reserva
+    const date = new Date(fecha_reserva)
     const codigo =
       "RES-" + date.toISOString().slice(0, 10).replace(/-/g, "") + "-" + Math.floor(1000 + Math.random() * 9000)
 
-    // Obtener el ID del estado "creada"
-    const estadoCreadaQuery = await query(`
+    // ✅ CORRECCIÓN CRÍTICA: Obtener todos los estados y buscar el estado inicial por nombre o ID
+    console.log("🔍 Buscando estado inicial...")
+
+    // Primero intentamos buscar por nombre 'creada'
+    let estadoInicialQuery = await query(`
       SELECT id FROM estados_solicitud WHERE nombre = 'creada'
     `)
 
-    if (estadoCreadaQuery.rows.length === 0) {
-      return sendError(res, "Error al obtener el estado inicial de la solicitud", 500)
+    // Si no encontramos 'creada', intentamos con 'pendiente'
+    if (estadoInicialQuery.rows.length === 0) {
+      console.log("⚠️ No se encontró estado 'creada', intentando con 'pendiente'")
+      estadoInicialQuery = await query(`
+        SELECT id FROM estados_solicitud WHERE nombre = 'pendiente'
+      `)
     }
 
-    const estadoCreadaId = estadoCreadaQuery.rows[0].id
+    // Si aún no encontramos, usamos el ID 1 como fallback
+    if (estadoInicialQuery.rows.length === 0) {
+      console.log("⚠️ No se encontraron estados por nombre, usando ID 1 como fallback")
+      estadoInicialQuery = await query(`
+        SELECT id FROM estados_solicitud WHERE id = 1
+      `)
+    }
+
+    // Si todavía no hay resultados, obtenemos el primer estado disponible
+    if (estadoInicialQuery.rows.length === 0) {
+      console.log("⚠️ No se encontró estado con ID 1, obteniendo el primer estado disponible")
+      estadoInicialQuery = await query(`
+        SELECT id FROM estados_solicitud ORDER BY id LIMIT 1
+      `)
+    }
+
+    if (estadoInicialQuery.rows.length === 0) {
+      console.error("❌ No se pudo encontrar ningún estado inicial")
+      return sendError(res, "Error crítico: No hay estados de solicitud definidos en el sistema", 500)
+    }
+
+    const estadoInicialId = estadoInicialQuery.rows[0].id
+    console.log(`✅ Estado inicial encontrado: ID ${estadoInicialId}`)
 
     // Iniciar transacción
     const client = await pool.connect()
@@ -489,13 +529,15 @@ export const createRequest = async (req, res) => {
           hora_fin,
           Number.parseInt(proposito_id),
           Number.parseInt(num_participantes),
-          estadoCreadaId,
+          estadoInicialId,
           notas || "",
           codigo,
         ],
       )
 
       const newRequestId = newRequestQuery.rows[0].id
+
+      console.log("✅ Solicitud creada exitosamente - ID:", newRequestId, "Código:", codigo)
 
       // Crear notificación para el usuario
       await client.query(
@@ -586,7 +628,45 @@ export const createRequest = async (req, res) => {
       client.release()
     }
   } catch (error) {
-    console.error("Error en createRequest:", error)
+    console.error("❌ Error en createRequest:", error)
+    return sendError(res, "Error en el servidor", 500)
+  }
+}
+
+// ✅ FUNCIÓN MEJORADA: Verificar disponibilidad
+export const verificarDisponibilidad = async (req, res) => {
+  try {
+    const { escenario_id, fecha, hora_inicio, hora_fin } = req.body
+
+    console.log("🔍 verificarDisponibilidad - Parámetros:", { escenario_id, fecha, hora_inicio, hora_fin })
+
+    // ✅ CORRECCIÓN: Usar estado_id = 3 (aprobada) según los datos reales
+    const result = await query(
+      `
+      SELECT id, codigo_reserva, hora_inicio, hora_fin
+      FROM solicitudes
+      WHERE escenario_id = $1
+        AND fecha_reserva = $2
+        AND estado_id = 3
+        AND (
+          (hora_inicio <= $3 AND hora_fin > $3) OR
+          (hora_inicio < $4 AND hora_fin >= $4) OR
+          (hora_inicio >= $3 AND hora_fin <= $4)
+        )
+      `,
+      [escenario_id, fecha, hora_inicio, hora_fin],
+    )
+
+    const disponible = result.rows.length === 0
+
+    console.log(`${disponible ? "✅" : "❌"} Disponibilidad: ${disponible ? "LIBRE" : "OCUPADO"}`)
+    if (!disponible) {
+      console.log("🚫 Conflictos encontrados:", result.rows)
+    }
+
+    return sendResponse(res, { disponible }, disponible ? "Horario disponible" : "Horario no disponible")
+  } catch (error) {
+    console.error("❌ Error en verificarDisponibilidad:", error)
     return sendError(res, "Error en el servidor", 500)
   }
 }
@@ -598,13 +678,15 @@ export const changeRequestStatus = async (req, res) => {
     const { estado, admin_notas } = req.body
     const adminId = req.user.id
 
+    console.log("🔄 changeRequestStatus - Solicitud:", id, "Nuevo estado:", estado)
+
     // Validar datos
     if (!estado) {
       return sendError(res, "El estado es requerido", 400)
     }
 
     // Verificar permisos de administrador o supervisor
-    if (req.user.role !== "admin" && req.user.role !== "supervisor") {
+    if (req.user.role !== "admin" && req.user.role !== "administrador" && req.user.role !== "supervisor") {
       return sendError(res, "No tienes permisos para realizar esta acción", 403)
     }
 
@@ -632,6 +714,37 @@ export const changeRequestStatus = async (req, res) => {
     }
 
     const existingRequest = existingRequestQuery.rows[0]
+
+    // ✅ VALIDACIÓN CRÍTICA: Si se está aprobando, verificar que no haya conflictos
+    if (estado === "aprobada") {
+      const conflictQuery = await query(
+        `
+        SELECT id, codigo_reserva
+        FROM solicitudes
+        WHERE escenario_id = $1
+          AND fecha_reserva = $2
+          AND estado_id = 3
+          AND id != $3
+          AND (
+            (hora_inicio <= $4 AND hora_fin > $4) OR
+            (hora_inicio < $5 AND hora_fin >= $5) OR
+            (hora_inicio >= $4 AND hora_fin <= $5)
+          )
+        `,
+        [
+          existingRequest.escenario_id,
+          existingRequest.fecha_reserva,
+          Number.parseInt(id),
+          existingRequest.hora_inicio,
+          existingRequest.hora_fin,
+        ],
+      )
+
+      if (conflictQuery.rows.length > 0) {
+        console.log("🚫 Conflicto detectado al aprobar:", conflictQuery.rows[0])
+        return sendError(res, "No se puede aprobar: ya existe otra reserva aprobada para este horario", 400)
+      }
+    }
 
     // Obtener el ID del nuevo estado
     const nuevoEstadoQuery = await query(
@@ -711,6 +824,8 @@ export const changeRequestStatus = async (req, res) => {
 
       await client.query("COMMIT")
 
+      console.log(`✅ Estado actualizado: ${existingRequest.estado_nombre} → ${estado}`)
+
       // Enviar email de notificación
       const emailTemplate = getEmailTemplate("request_updated", {
         nombre: existingRequest.usuario_nombre,
@@ -730,7 +845,7 @@ export const changeRequestStatus = async (req, res) => {
       client.release()
     }
   } catch (error) {
-    console.error("Error en changeRequestStatus:", error)
+    console.error("❌ Error en changeRequestStatus:", error)
     return sendError(res, "Error en el servidor", 500)
   }
 }
@@ -763,6 +878,166 @@ export const getRequestPurposes = async (req, res) => {
     return sendResponse(res, purposesQuery.rows, "Propósitos obtenidos exitosamente")
   } catch (error) {
     console.error("Error en getRequestPurposes:", error)
+    return sendError(res, "Error en el servidor", 500)
+  }
+}
+
+// ✅ FUNCIÓN MEJORADA: Obtener días disponibles
+export const getAvailableDays = async (req, res) => {
+  try {
+    let { escenario_id, desde, hasta } = req.query
+
+    console.log("🔍 getAvailableDays - Parámetros recibidos:", { escenario_id, desde, hasta })
+
+    if (!escenario_id || !desde || !hasta) {
+      return sendError(res, "Error de validación en parámetros", 400, ["escenario_id, desde y hasta son requeridos"])
+    }
+
+    escenario_id = Number.parseInt(escenario_id)
+    if (isNaN(escenario_id)) {
+      return sendError(res, "Error de validación en parámetros", 400, ["El ID debe ser un número"])
+    }
+
+    const availableHours = ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00"]
+
+    // ✅ CORRECCIÓN: Usar estado_id = 3 (aprobada) según los datos reales
+    const reservasQuery = await query(
+      `
+      SELECT fecha_reserva, hora_inicio, hora_fin
+      FROM solicitudes
+      WHERE escenario_id = $1
+        AND fecha_reserva BETWEEN $2 AND $3
+        AND estado_id = 3
+      `,
+      [escenario_id, desde, hasta],
+    )
+
+    console.log("📅 Reservas aprobadas encontradas:", reservasQuery.rows.length)
+
+    // Agrupar reservas por fecha
+    const reservasPorFecha = {}
+    reservasQuery.rows.forEach((r) => {
+      const fecha = r.fecha_reserva.toISOString().slice(0, 10)
+      if (!reservasPorFecha[fecha]) reservasPorFecha[fecha] = []
+
+      const inicio = r.hora_inicio.length > 5 ? r.hora_inicio.slice(0, 5) : r.hora_inicio
+      const fin = r.hora_fin.length > 5 ? r.hora_fin.slice(0, 5) : r.hora_fin
+
+      reservasPorFecha[fecha].push({ inicio, fin })
+    })
+
+    // Generar fechas del rango
+    const fechas = []
+    const d = new Date(desde)
+    const end = new Date(hasta)
+    while (d <= end) {
+      fechas.push(d.toISOString().slice(0, 10))
+      d.setDate(d.getDate() + 1)
+    }
+
+    // Para cada fecha, verificar si hay al menos un horario libre
+    const diasDisponibles = fechas.filter((fecha) => {
+      const reservas = reservasPorFecha[fecha] || []
+      // Para cada horario, verificar si está libre
+      return availableHours.some((hora) => {
+        return !reservas.some((r) => hora >= r.inicio && hora < r.fin)
+      })
+    })
+
+    console.log("✅ Días disponibles finales:", diasDisponibles.length)
+
+    return sendResponse(res, diasDisponibles, "Días disponibles obtenidos exitosamente")
+  } catch (error) {
+    console.error("❌ Error en getAvailableDays:", error)
+    return sendError(res, "Error en el servidor", 500)
+  }
+}
+
+// ✅ FUNCIÓN CRÍTICA: Obtener horas disponibles con debugging extremo
+export const getAvailableHours = async (req, res) => {
+  try {
+    let { escenario_id, fecha } = req.query
+
+    console.log("🔄 getAvailableHours - Parámetros:", { escenario_id, fecha })
+
+    if (!escenario_id || !fecha) {
+      return sendError(res, "Error de validación en parámetros", 400, ["escenario_id y fecha son requeridos"])
+    }
+
+    escenario_id = Number.parseInt(escenario_id)
+    if (isNaN(escenario_id)) {
+      return sendError(res, "Error de validación en parámetros", 400, ["El ID debe ser un número"])
+    }
+
+    // Horarios base disponibles
+    const availableHours = ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00"]
+    console.log("⏰ Horarios base:", availableHours)
+
+    // ✅ CORRECCIÓN CRÍTICA: Usar múltiples formatos de fecha para asegurar que encontramos todas las reservas
+    console.log("🔍 Buscando reservas aprobadas con múltiples formatos de fecha...")
+
+    const reservasQuery = await query(
+      `
+      SELECT hora_inicio, hora_fin, codigo_reserva, id, fecha_reserva
+      FROM solicitudes
+      WHERE escenario_id = $1
+        AND (
+          DATE(fecha_reserva) = DATE($2) OR
+          fecha_reserva::date = $2::date OR
+          fecha_reserva = $2 OR
+          fecha_reserva = $2::timestamp
+        )
+        AND estado_id = 3
+      ORDER BY hora_inicio
+      `,
+      [escenario_id, fecha],
+    )
+
+    console.log(`🔒 Reservas aprobadas encontradas: ${reservasQuery.rows.length}`)
+
+    if (reservasQuery.rows.length === 0) {
+      console.log("✅ NO HAY RESERVAS APROBADAS - Todos los horarios están disponibles")
+      return sendResponse(res, availableHours, "Horas disponibles obtenidas exitosamente")
+    }
+
+    console.log("📋 Detalle de reservas aprobadas:")
+    reservasQuery.rows.forEach((r, index) => {
+      const fechaFormateada = r.fecha_reserva.toISOString().slice(0, 10)
+      console.log(
+        `   ${index + 1}. ID: ${r.id} | ${fechaFormateada} | ${r.hora_inicio}-${r.hora_fin} | ${r.codigo_reserva}`,
+      )
+    })
+
+    // Procesar reservas ocupadas
+    const reservasOcupadas = reservasQuery.rows.map((r) => {
+      const inicio = r.hora_inicio.length > 5 ? r.hora_inicio.slice(0, 5) : r.hora_inicio
+      const fin = r.hora_fin.length > 5 ? r.hora_fin.slice(0, 5) : r.hora_fin
+
+      return { inicio, fin, codigo: r.codigo_reserva, id: r.id }
+    })
+
+    console.log("🔒 Reservas procesadas:", reservasOcupadas)
+
+    // Filtrar horas disponibles
+    const horasLibres = availableHours.filter((hora) => {
+      const conflictos = reservasOcupadas.filter((reserva) => {
+        // Una hora está ocupada si cae dentro del rango de una reserva
+        const ocupado = hora >= reserva.inicio && hora < reserva.fin
+        if (ocupado) {
+          console.log(`❌ Hora ${hora} ocupada por reserva ${reserva.codigo} (${reserva.inicio}-${reserva.fin})`)
+        }
+        return ocupado
+      })
+
+      return conflictos.length === 0
+    })
+
+    console.log("✅ Horas disponibles finales:", horasLibres)
+    console.log(`📊 Total: ${horasLibres.length} de ${availableHours.length} horas disponibles`)
+
+    return sendResponse(res, horasLibres, "Horas disponibles obtenidas exitosamente")
+  } catch (error) {
+    console.error("❌ Error en getAvailableHours:", error)
     return sendError(res, "Error en el servidor", 500)
   }
 }

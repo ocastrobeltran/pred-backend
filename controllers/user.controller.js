@@ -1,64 +1,73 @@
 import bcrypt from "bcrypt"
+import jwt from "jsonwebtoken"
 import { query } from "../config/database.js"
 import { sendResponse, sendError } from "../utils/response.util.js"
-import { sendEmail, getEmailTemplate } from "../utils/email.util.js"
 
+// Obtener todos los usuarios (solo admin)
 export const getAllUsers = async (req, res) => {
   try {
-    const { page = 1, limit = 10, rol_id, estado, search } = req.query
-    const pageNumber = Number.parseInt(page)
-    const limitNumber = Number.parseInt(limit)
-    const offset = (pageNumber - 1) * limitNumber
+    const { page = 1, limit = 10, search, rol_id, estado } = req.query
+    const offset = (page - 1) * limit
 
-    // Construir la consulta base
-    let queryText = `
-      SELECT u.*, r.nombre as rol_nombre
-      FROM usuarios u
-      JOIN roles r ON u.rol_id = r.id
-      WHERE 1=1
-    `
-
+    const whereConditions = []
     const queryParams = []
     let paramIndex = 1
 
-    // Añadir filtros
-    if (rol_id) {
-      queryText += ` AND u.rol_id = $${paramIndex++}`
-      queryParams.push(Number.parseInt(rol_id))
-    }
-
-    if (estado) {
-      queryText += ` AND u.estado = $${paramIndex++}`
-      queryParams.push(estado)
-    }
-
+    // Filtros
     if (search) {
-      queryText += ` AND (u.nombre ILIKE $${paramIndex} OR u.apellido ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex} OR u.cedula ILIKE $${paramIndex})`
+      whereConditions.push(
+        `(u.nombre ILIKE $${paramIndex} OR u.apellido ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex} OR u.cedula ILIKE $${paramIndex})`,
+      )
       queryParams.push(`%${search}%`)
       paramIndex++
     }
 
-    // Añadir ordenamiento
-    queryText += ` ORDER BY u.id DESC`
+    if (rol_id) {
+      whereConditions.push(`u.rol_id = $${paramIndex}`)
+      queryParams.push(rol_id)
+      paramIndex++
+    }
 
-    // Consulta para contar el total de registros
-    const countQuery = `SELECT COUNT(*) FROM (${queryText}) AS count_query`
+    if (estado) {
+      whereConditions.push(`u.estado = $${paramIndex}`)
+      queryParams.push(estado)
+      paramIndex++
+    }
 
-    // Añadir paginación
-    queryText += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`
-    queryParams.push(limitNumber, offset)
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(" AND ")}` : ""
 
-    // Ejecutar consultas
-    const [usersResult, countResult] = await Promise.all([
-      query(queryText, queryParams),
-      query(countQuery, queryParams.slice(0, -2)), // Excluir los parámetros de LIMIT y OFFSET
-    ])
+    // Query principal
+    const queryText = `
+      SELECT u.*, r.nombre as rol_nombre
+      FROM usuarios u
+      JOIN roles r ON u.rol_id = r.id
+      ${whereClause}
+      ORDER BY u.id DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `
 
-    const users = usersResult.rows
+    queryParams.push(limit, offset)
+
+    console.log("Query usuarios:", queryText)
+    console.log("Params:", queryParams)
+
+    const result = await query(queryText, queryParams)
+
+    // Query para contar total
+    const countQuery = `
+      SELECT COUNT(*) FROM (
+        SELECT u.id
+        FROM usuarios u
+        JOIN roles r ON u.rol_id = r.id
+        ${whereClause}
+      ) AS count_query
+    `
+
+    const countResult = await query(countQuery, queryParams.slice(0, -2))
     const total = Number.parseInt(countResult.rows[0].count)
 
-    // Formatear datos para la respuesta
-    const formattedUsers = users.map((user) => ({
+    // Transformar datos
+    const usuarios = result.rows.map((user) => ({
       id: user.id,
       nombre: user.nombre,
       apellido: user.apellido,
@@ -67,31 +76,70 @@ export const getAllUsers = async (req, res) => {
       telefono: user.telefono,
       direccion: user.direccion,
       rol_id: user.rol_id,
-      rol_nombre: user.rol_nombre,
+      rol: {
+        nombre: user.rol_nombre,
+      },
       estado: user.estado,
-      ultimo_login: user.ultimo_login,
       created_at: user.created_at,
+      updated_at: user.updated_at,
     }))
 
-    return sendResponse(
-      res,
-      {
-        data: formattedUsers,
+    console.log(`📊 Usuarios encontrados: ${usuarios.length} de ${total} total`)
+
+    res.json({
+      success: true,
+      message: "Usuarios obtenidos exitosamente",
+      data: {
+        data: usuarios,
         pagination: {
-          total,
-          per_page: limitNumber,
-          current_page: pageNumber,
-          last_page: Math.ceil(total / limitNumber),
+          current_page: Number.parseInt(page),
+          last_page: Math.ceil(total / limit),
+          per_page: Number.parseInt(limit),
+          total: total,
         },
       },
-      "Usuarios obtenidos exitosamente",
-    )
+    })
   } catch (error) {
-    console.error("Error en getAllUsers:", error)
-    return sendError(res, "Error en el servidor", 500)
+    console.error("Error al obtener usuarios:", error)
+    res.status(500).json({
+      success: false,
+      message: "Error interno del servidor",
+      error: error.message,
+    })
   }
 }
 
+// Obtener roles
+export const getRoles = async (req, res) => {
+  try {
+    console.log("🔄 Obteniendo roles...")
+
+    const queryText = `
+      SELECT id, nombre, descripcion
+      FROM roles
+      ORDER BY id ASC
+    `
+
+    const result = await query(queryText)
+
+    console.log(`📊 Roles encontrados: ${result.rows.length}`)
+
+    res.json({
+      success: true,
+      message: "Roles obtenidos exitosamente",
+      data: result.rows,
+    })
+  } catch (error) {
+    console.error("💥 Error al obtener roles:", error)
+    res.status(500).json({
+      success: false,
+      message: "Error interno del servidor",
+      error: error.message,
+    })
+  }
+}
+
+// Obtener usuario por ID
 export const getUserById = async (req, res) => {
   try {
     const { id } = req.params
@@ -101,24 +149,20 @@ export const getUserById = async (req, res) => {
       return sendError(res, "No tienes permisos para realizar esta acción", 403)
     }
 
-    // Buscar usuario
-    const userQuery = await query(
-      `
+    const queryText = `
       SELECT u.*, r.nombre as rol_nombre
       FROM usuarios u
       JOIN roles r ON u.rol_id = r.id
       WHERE u.id = $1
-    `,
-      [Number.parseInt(id)],
-    )
+    `
 
-    if (userQuery.rows.length === 0) {
+    const result = await query(queryText, [Number.parseInt(id)])
+
+    if (result.rows.length === 0) {
       return sendError(res, "Usuario no encontrado", 404)
     }
 
-    const user = userQuery.rows[0]
-
-    // Formatear datos para la respuesta
+    const user = result.rows[0]
     const userData = {
       id: user.id,
       nombre: user.nombre,
@@ -128,7 +172,9 @@ export const getUserById = async (req, res) => {
       telefono: user.telefono,
       direccion: user.direccion,
       rol_id: user.rol_id,
-      rol_nombre: user.rol_nombre,
+      rol: {
+        nombre: user.rol_nombre,
+      },
       estado: user.estado,
       ultimo_login: user.ultimo_login,
       created_at: user.created_at,
@@ -137,14 +183,21 @@ export const getUserById = async (req, res) => {
 
     return sendResponse(res, userData, "Usuario obtenido exitosamente")
   } catch (error) {
-    console.error("Error en getUserById:", error)
-    return sendError(res, "Error en el servidor", 500)
+    console.error("Error al obtener usuario:", error)
+    res.status(500).json({
+      success: false,
+      message: "Error interno del servidor",
+      error: error.message,
+    })
   }
 }
 
+// Crear usuario
 export const createUser = async (req, res) => {
   try {
     const { nombre, apellido, email, password, cedula, telefono, direccion, rol_id } = req.body
+
+    console.log("🔄 Creando usuario:", { nombre, apellido, email, rol_id })
 
     // Validar datos
     const requiredFields = ["nombre", "apellido", "email", "password", "rol_id"]
@@ -171,6 +224,20 @@ export const createUser = async (req, res) => {
       return sendError(res, "El correo electrónico ya está registrado", 400)
     }
 
+    // Verificar si la cédula ya está registrada (si se proporciona)
+    if (cedula) {
+      const existingCedulaQuery = await query(
+        `
+        SELECT id FROM usuarios WHERE cedula = $1
+      `,
+        [cedula],
+      )
+
+      if (existingCedulaQuery.rows.length > 0) {
+        return sendError(res, "La cédula ya está registrada", 400)
+      }
+    }
+
     // Hash de la contraseña
     const hashedPassword = await bcrypt.hash(password, 10)
 
@@ -182,7 +249,7 @@ export const createUser = async (req, res) => {
         rol_id, estado, created_at, updated_at
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
-      RETURNING id
+      RETURNING id, nombre, apellido, email, cedula, telefono, direccion, rol_id, estado, created_at
     `,
       [
         nombre,
@@ -197,23 +264,24 @@ export const createUser = async (req, res) => {
       ],
     )
 
-    const newUserId = newUserQuery.rows[0].id
+    const newUser = newUserQuery.rows[0]
 
-    // Enviar email de bienvenida
-    const emailTemplate = getEmailTemplate("account_activated", { nombre })
-    await sendEmail(email, emailTemplate.subject, emailTemplate.html)
+    console.log("✅ Usuario creado exitosamente:", newUser.id)
 
-    return sendResponse(res, { user_id: newUserId }, "Usuario creado exitosamente")
+    return sendResponse(res, newUser, "Usuario creado exitosamente")
   } catch (error) {
-    console.error("Error en createUser:", error)
+    console.error("💥 Error en createUser:", error)
     return sendError(res, "Error en el servidor", 500)
   }
 }
 
+// Actualizar usuario
 export const updateUser = async (req, res) => {
   try {
     const { id } = req.params
     const { nombre, apellido, email, password, cedula, telefono, direccion, rol_id, estado } = req.body
+
+    console.log("🔄 Actualizando usuario:", id, req.body)
 
     // Verificar permisos (solo el propio usuario o un administrador puede actualizar)
     if (req.user.id !== Number.parseInt(id) && req.user.role !== "admin") {
@@ -232,6 +300,34 @@ export const updateUser = async (req, res) => {
       return sendError(res, "Usuario no encontrado", 404)
     }
 
+    // Verificar email único (si se está cambiando)
+    if (email) {
+      const emailQuery = await query(
+        `
+        SELECT id FROM usuarios WHERE email = $1 AND id != $2
+      `,
+        [email, Number.parseInt(id)],
+      )
+
+      if (emailQuery.rows.length > 0) {
+        return sendError(res, "El email ya está en uso por otro usuario", 400)
+      }
+    }
+
+    // Verificar cédula única (si se está cambiando)
+    if (cedula) {
+      const cedulaQuery = await query(
+        `
+        SELECT id FROM usuarios WHERE cedula = $1 AND id != $2
+      `,
+        [cedula, Number.parseInt(id)],
+      )
+
+      if (cedulaQuery.rows.length > 0) {
+        return sendError(res, "La cédula ya está en uso por otro usuario", 400)
+      }
+    }
+
     // Preparar datos para actualizar
     const updateFields = []
     const updateValues = []
@@ -247,23 +343,23 @@ export const updateUser = async (req, res) => {
       updateValues.push(apellido)
     }
 
-    if (cedula) {
+    if (cedula !== undefined) {
       updateFields.push(`cedula = $${paramIndex++}`)
       updateValues.push(cedula)
     }
 
-    if (telefono) {
+    if (telefono !== undefined) {
       updateFields.push(`telefono = $${paramIndex++}`)
       updateValues.push(telefono)
     }
 
-    if (direccion) {
+    if (direccion !== undefined) {
       updateFields.push(`direccion = $${paramIndex++}`)
       updateValues.push(direccion)
     }
 
     // Solo el administrador puede cambiar estos campos
-    if (req.user.role === "admin") {
+    if (req.user.role === "admin" || req.user.role === "administrador") {
       if (email) {
         updateFields.push(`email = $${paramIndex++}`)
         updateValues.push(email)
@@ -291,7 +387,8 @@ export const updateUser = async (req, res) => {
     updateFields.push(`updated_at = $${paramIndex++}`)
     updateValues.push(new Date())
 
-    if (updateFields.length === 0) {
+    if (updateFields.length === 1) {
+      // Solo updated_at
       return sendError(res, "No se proporcionaron datos para actualizar", 400)
     }
 
@@ -299,25 +396,30 @@ export const updateUser = async (req, res) => {
     updateValues.push(Number.parseInt(id))
 
     // Actualizar usuario
-    await query(
-      `
+    const updateQuery = `
       UPDATE usuarios
       SET ${updateFields.join(", ")}
       WHERE id = $${paramIndex}
-    `,
-      updateValues,
-    )
+      RETURNING id, nombre, apellido, email, cedula, telefono, direccion, rol_id, estado, updated_at
+    `
 
-    return sendResponse(res, null, "Usuario actualizado exitosamente")
+    const result = await query(updateQuery, updateValues)
+
+    console.log("✅ Usuario actualizado exitosamente:", id)
+
+    return sendResponse(res, result.rows[0], "Usuario actualizado exitosamente")
   } catch (error) {
-    console.error("Error en updateUser:", error)
+    console.error("💥 Error en updateUser:", error)
     return sendError(res, "Error en el servidor", 500)
   }
 }
 
+// Eliminar usuario
 export const deleteUser = async (req, res) => {
   try {
     const { id } = req.params
+
+    console.log("🔄 Eliminando usuario:", id)
 
     // Verificar si el usuario existe
     const existingUserQuery = await query(
@@ -329,6 +431,11 @@ export const deleteUser = async (req, res) => {
 
     if (existingUserQuery.rows.length === 0) {
       return sendError(res, "Usuario no encontrado", 404)
+    }
+
+    // No permitir eliminar el usuario actual
+    if (req.user.id === Number.parseInt(id)) {
+      return sendError(res, "No puedes eliminar tu propia cuenta", 400)
     }
 
     // Verificar si hay solicitudes asociadas
@@ -359,24 +466,265 @@ export const deleteUser = async (req, res) => {
       [Number.parseInt(id)],
     )
 
+    console.log("✅ Usuario eliminado exitosamente:", id)
+
     return sendResponse(res, null, "Usuario eliminado exitosamente")
   } catch (error) {
-    console.error("Error en deleteUser:", error)
+    console.error("💥 Error en deleteUser:", error)
     return sendError(res, "Error en el servidor", 500)
   }
 }
 
-export const getRoles = async (req, res) => {
+// Obtener perfil del usuario actual
+export const getProfile = async (req, res) => {
   try {
-    const rolesQuery = await query(`
-      SELECT id, nombre, descripcion
-      FROM roles
-      ORDER BY id ASC
-    `)
+    const queryText = `
+      SELECT u.*, r.nombre as rol_nombre
+      FROM usuarios u
+      JOIN roles r ON u.rol_id = r.id
+      WHERE u.id = $1
+    `
 
-    return sendResponse(res, rolesQuery.rows, "Roles obtenidos exitosamente")
+    const result = await query(queryText, [req.user.id])
+
+    if (result.rows.length === 0) {
+      return sendError(res, "Usuario no encontrado", 404)
+    }
+
+    const user = result.rows[0]
+    const { password, ...userWithoutPassword } = user
+
+    res.json({
+      success: true,
+      message: "Perfil obtenido exitosamente",
+      data: {
+        ...userWithoutPassword,
+        rol: {
+          nombre: user.rol_nombre,
+        },
+      },
+    })
   } catch (error) {
-    console.error("Error en getRoles:", error)
-    return sendError(res, "Error en el servidor", 500)
+    console.error("Error al obtener perfil:", error)
+    res.status(500).json({
+      success: false,
+      message: "Error interno del servidor",
+      error: error.message,
+    })
+  }
+}
+
+// Actualizar perfil del usuario actual
+export const updateProfile = async (req, res) => {
+  try {
+    const { nombre, apellido, telefono, direccion } = req.body
+
+    const queryText = `
+      UPDATE usuarios 
+      SET nombre = COALESCE($1, nombre),
+          apellido = COALESCE($2, apellido),
+          telefono = COALESCE($3, telefono),
+          direccion = COALESCE($4, direccion),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $5
+      RETURNING id, nombre, apellido, email, cedula, telefono, direccion, rol_id, estado, updated_at
+    `
+
+    const result = await query(queryText, [nombre, apellido, telefono, direccion, req.user.id])
+
+    res.json({
+      success: true,
+      message: "Perfil actualizado exitosamente",
+      data: result.rows[0],
+    })
+  } catch (error) {
+    console.error("Error al actualizar perfil:", error)
+    res.status(500).json({
+      success: false,
+      message: "Error interno del servidor",
+      error: error.message,
+    })
+  }
+}
+
+// Cambiar contraseña
+export const changePassword = async (req, res) => {
+  try {
+    const { current_password, password } = req.body
+
+    if (!current_password || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "La contraseña actual y la nueva contraseña son requeridas",
+      })
+    }
+
+    // Obtener usuario actual
+    const userResult = await query("SELECT password FROM usuarios WHERE id = $1", [req.user.id])
+    const user = userResult.rows[0]
+
+    // Verificar contraseña actual
+    const isValidPassword = await bcrypt.compare(current_password, user.password)
+    if (!isValidPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "La contraseña actual es incorrecta",
+      })
+    }
+
+    // Encriptar nueva contraseña
+    const hashedPassword = await bcrypt.hash(password, 10)
+
+    // Actualizar contraseña
+    await query("UPDATE usuarios SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", [
+      hashedPassword,
+      req.user.id,
+    ])
+
+    res.json({
+      success: true,
+      message: "Contraseña cambiada exitosamente",
+    })
+  } catch (error) {
+    console.error("Error al cambiar contraseña:", error)
+    res.status(500).json({
+      success: false,
+      message: "Error interno del servidor",
+      error: error.message,
+    })
+  }
+}
+
+// Registro de usuario
+export const register = async (req, res) => {
+  try {
+    const { nombre, apellido, email, cedula, telefono, direccion, password } = req.body
+
+    // Validar campos requeridos
+    if (!nombre || !apellido || !email || !cedula || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Todos los campos requeridos deben ser proporcionados",
+      })
+    }
+
+    // Verificar si el email ya existe
+    const emailCheck = await query("SELECT id FROM usuarios WHERE email = $1", [email])
+    if (emailCheck.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "El email ya está registrado",
+      })
+    }
+
+    // Verificar si la cédula ya existe
+    const cedulaCheck = await query("SELECT id FROM usuarios WHERE cedula = $1", [cedula])
+    if (cedulaCheck.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "La cédula ya está registrada",
+      })
+    }
+
+    // Encriptar contraseña
+    const hashedPassword = await bcrypt.hash(password, 10)
+
+    // Insertar usuario con rol de usuario (3)
+    const queryText = `
+      INSERT INTO usuarios (nombre, apellido, email, cedula, telefono, direccion, rol_id, password, estado)
+      VALUES ($1, $2, $3, $4, $5, $6, 3, $7, 'activo')
+      RETURNING id, nombre, apellido, email, cedula, telefono, direccion, rol_id, estado, created_at
+    `
+
+    const result = await query(queryText, [nombre, apellido, email, cedula, telefono, direccion, hashedPassword])
+
+    res.status(201).json({
+      success: true,
+      message: "Usuario registrado exitosamente",
+      data: result.rows[0],
+    })
+  } catch (error) {
+    console.error("Error al registrar usuario:", error)
+    res.status(500).json({
+      success: false,
+      message: "Error interno del servidor",
+      error: error.message,
+    })
+  }
+}
+
+// Login de usuario
+export const login = async (req, res) => {
+  try {
+    const { email, password } = req.body
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email y contraseña son requeridos",
+      })
+    }
+
+    // Buscar usuario
+    const queryText = `
+      SELECT u.*, r.nombre as rol_nombre
+      FROM usuarios u
+      JOIN roles r ON u.rol_id = r.id
+      WHERE u.email = $1 AND u.estado = 'activo'
+    `
+
+    const result = await query(queryText, [email])
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: "Credenciales inválidas",
+      })
+    }
+
+    const user = result.rows[0]
+
+    // Verificar contraseña
+    const isValidPassword = await bcrypt.compare(password, user.password)
+    if (!isValidPassword) {
+      return res.status(401).json({
+        success: false,
+        message: "Credenciales inválidas",
+      })
+    }
+
+    // Generar token
+    const token = jwt.sign(
+      {
+        id: user.id,
+        email: user.email,
+        role: user.rol_nombre.toLowerCase(),
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "24h" },
+    )
+
+    const { password: _, ...userWithoutPassword } = user
+
+    res.json({
+      success: true,
+      message: "Login exitoso",
+      data: {
+        user: {
+          ...userWithoutPassword,
+          rol: {
+            nombre: user.rol_nombre,
+          },
+        },
+        token,
+      },
+    })
+  } catch (error) {
+    console.error("Error en login:", error)
+    res.status(500).json({
+      success: false,
+      message: "Error interno del servidor",
+      error: error.message,
+    })
   }
 }

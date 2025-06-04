@@ -9,6 +9,8 @@ export const getNotifications = async (req, res) => {
     const offset = (pageNumber - 1) * limitNumber
     const userId = req.user.id
 
+    console.log("🔔 getNotifications - Usuario:", userId, "Página:", pageNumber)
+
     // Construir la consulta base
     let queryText = `
       SELECT *
@@ -35,6 +37,9 @@ export const getNotifications = async (req, res) => {
     queryText += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`
     queryParams.push(limitNumber, offset)
 
+    console.log("🔍 Query notificaciones:", queryText)
+    console.log("🔍 Params:", queryParams)
+
     // Ejecutar consultas
     const [notificationsResult, countResult] = await Promise.all([
       query(queryText, queryParams),
@@ -43,6 +48,8 @@ export const getNotifications = async (req, res) => {
 
     const notifications = notificationsResult.rows
     const total = Number.parseInt(countResult.rows[0].count)
+
+    console.log(`📊 Notificaciones encontradas: ${notifications.length} de ${total} total`)
 
     return sendResponse(
       res,
@@ -58,7 +65,7 @@ export const getNotifications = async (req, res) => {
       "Notificaciones obtenidas exitosamente",
     )
   } catch (error) {
-    console.error("Error en getNotifications:", error)
+    console.error("❌ Error en getNotifications:", error)
     return sendError(res, "Error en el servidor", 500)
   }
 }
@@ -67,6 +74,8 @@ export const markAsRead = async (req, res) => {
   try {
     const { id } = req.params
     const userId = req.user.id
+
+    console.log("✅ markAsRead - Notificación:", id, "Usuario:", userId)
 
     // Verificar si la notificación existe y pertenece al usuario
     const notificationQuery = await query(
@@ -91,9 +100,11 @@ export const markAsRead = async (req, res) => {
       [Number.parseInt(id)],
     )
 
+    console.log("✅ Notificación marcada como leída")
+
     return sendResponse(res, null, "Notificación marcada como leída exitosamente")
   } catch (error) {
-    console.error("Error en markAsRead:", error)
+    console.error("❌ Error en markAsRead:", error)
     return sendError(res, "Error en el servidor", 500)
   }
 }
@@ -102,8 +113,10 @@ export const markAllAsRead = async (req, res) => {
   try {
     const userId = req.user.id
 
+    console.log("✅ markAllAsRead - Usuario:", userId)
+
     // Marcar todas las notificaciones del usuario como leídas
-    await query(
+    const result = await query(
       `
       UPDATE notificaciones
       SET leida = true
@@ -112,9 +125,17 @@ export const markAllAsRead = async (req, res) => {
       [userId],
     )
 
-    return sendResponse(res, null, "Todas las notificaciones marcadas como leídas exitosamente")
+    const updatedCount = result.rowCount
+
+    console.log(`✅ ${updatedCount} notificaciones marcadas como leídas`)
+
+    return sendResponse(
+      res,
+      { updated_count: updatedCount },
+      "Todas las notificaciones marcadas como leídas exitosamente",
+    )
   } catch (error) {
-    console.error("Error en markAllAsRead:", error)
+    console.error("❌ Error en markAllAsRead:", error)
     return sendError(res, "Error en el servidor", 500)
   }
 }
@@ -123,10 +144,12 @@ export const countUnread = async (req, res) => {
   try {
     const userId = req.user.id
 
+    console.log("🔢 countUnread - Usuario:", userId)
+
     // Contar notificaciones no leídas
     const countResult = await query(
       `
-      SELECT COUNT(*) FROM notificaciones
+      SELECT COUNT(*) as count FROM notificaciones
       WHERE usuario_id = $1 AND leida = false
     `,
       [userId],
@@ -134,15 +157,19 @@ export const countUnread = async (req, res) => {
 
     const count = Number.parseInt(countResult.rows[0].count)
 
+    console.log(`📊 Notificaciones no leídas: ${count}`)
+
     return sendResponse(res, { count }, "Conteo de notificaciones no leídas obtenido exitosamente")
   } catch (error) {
-    console.error("Error en countUnread:", error)
+    console.error("❌ Error en countUnread:", error)
     return sendError(res, "Error en el servidor", 500)
   }
 }
 
 export const createNotification = async (userId, title, message, type = "info", url = null) => {
   try {
+    console.log("🆕 createNotification - Datos:", { userId, title, message, type, url })
+
     await query(
       `
       INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo, url, leida, created_at)
@@ -151,9 +178,11 @@ export const createNotification = async (userId, title, message, type = "info", 
       [userId, title, message, type, url],
     )
 
+    console.log("✅ Notificación creada exitosamente")
+
     return true
   } catch (error) {
-    console.error("Error al crear notificación:", error)
+    console.error("❌ Error al crear notificación:", error)
     return false
   }
 }
