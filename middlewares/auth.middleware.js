@@ -1,23 +1,20 @@
 import jwt from "jsonwebtoken"
 import { query } from "../config/database.js"
-import { sendError } from "../utils/response.util.js"
 
-// Middleware para autenticar usuarios
 export const authenticate = async (req, res, next) => {
   try {
-    // Obtener token del header
     const authHeader = req.headers.authorization
-
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return sendError(res, "Acceso denegado. Token no proporcionado", 401)
+      return res.status(401).json({
+        success: false,
+        message: "Token de acceso requerido",
+      })
     }
 
-    const token = authHeader.split(" ")[1]
-
-    // Verificar token
+    const token = authHeader.substring(7)
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
 
-    // Verificar si el usuario existe y está activo
+    // Obtener información actualizada del usuario
     const userQuery = await query(
       `
       SELECT u.id, u.email, u.estado, r.nombre as rol
@@ -29,47 +26,78 @@ export const authenticate = async (req, res, next) => {
     )
 
     if (userQuery.rows.length === 0) {
-      return sendError(res, "Usuario no encontrado", 401)
+      return res.status(401).json({
+        success: false,
+        message: "Usuario no encontrado",
+      })
     }
 
     const user = userQuery.rows[0]
 
     if (user.estado !== "activo") {
-      return sendError(res, "Usuario inactivo", 403)
+      return res.status(401).json({
+        success: false,
+        message: "Usuario inactivo",
+      })
     }
 
-    // Añadir usuario al request
     req.user = {
       id: user.id,
       email: user.email,
       role: user.rol,
     }
 
+    console.log("🔐 Usuario autenticado:", req.user)
     next()
   } catch (error) {
-    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
-      return sendError(res, "Token inválido o expirado", 401)
-    }
-
-    console.error("Error en authenticate middleware:", error)
-    return sendError(res, "Error en el servidor", 500)
+    console.error("Error en autenticación:", error)
+    return res.status(401).json({
+      success: false,
+      message: "Token inválido",
+    })
   }
 }
 
-// Middleware para verificar rol de administrador
-export const isAdmin = (req, res, next) => {
-  if (!req.user || req.user.role !== "admin") {
-    return sendError(res, "Acceso denegado. Se requiere rol de administrador", 403)
+export const isSupervisorOrAdmin = (req, res, next) => {
+  console.log("🔍 Verificando permisos de supervisor/admin para usuario:", req.user)
+
+  // ✅ CORRECCIÓN: Verificar múltiples variantes del rol de administrador
+  const userRole = req.user.role?.toLowerCase()
+  const allowedRoles = ["admin", "administrador", "supervisor"]
+
+  console.log("🔍 Rol del usuario:", userRole)
+  console.log("🔍 Roles permitidos:", allowedRoles)
+
+  if (!allowedRoles.includes(userRole)) {
+    console.log("❌ Acceso denegado - Rol no autorizado:", userRole)
+    return res.status(403).json({
+      success: false,
+      message: "No tienes permisos para realizar esta acción",
+    })
   }
 
+  console.log("✅ Acceso autorizado para rol:", userRole)
   next()
 }
 
-// Middleware para verificar rol de supervisor o administrador
-export const isSupervisorOrAdmin = (req, res, next) => {
-  if (!req.user || (req.user.role !== "admin" && req.user.role !== "supervisor")) {
-    return sendError(res, "Acceso denegado. Se requiere rol de supervisor o administrador", 403)
+export const isAdmin = (req, res, next) => {
+  console.log("🔍 Verificando permisos de admin para usuario:", req.user)
+
+  // ✅ CORRECCIÓN: Verificar múltiples variantes del rol de administrador
+  const userRole = req.user.role?.toLowerCase()
+  const allowedRoles = ["admin", "administrador"]
+
+  console.log("🔍 Rol del usuario:", userRole)
+  console.log("🔍 Roles permitidos:", allowedRoles)
+
+  if (!allowedRoles.includes(userRole)) {
+    console.log("❌ Acceso denegado - Rol no autorizado:", userRole)
+    return res.status(403).json({
+      success: false,
+      message: "Solo los administradores pueden realizar esta acción",
+    })
   }
 
+  console.log("✅ Acceso autorizado para admin:", userRole)
   next()
 }

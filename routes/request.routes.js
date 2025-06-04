@@ -7,6 +7,9 @@ import {
   findByReservationCode,
   getRequestStatuses,
   getRequestPurposes,
+  verificarDisponibilidad,
+  getAvailableDays,
+  getAvailableHours,
 } from "../controllers/request.controller.js"
 import { authenticate, isSupervisorOrAdmin } from "../middlewares/auth.middleware.js"
 import { validate, validateParams, validateQuery } from "../middlewares/validation.middleware.js"
@@ -22,6 +25,10 @@ router.get("/", authenticate, getAllRequests)
 router.get("/:id", authenticate, validateParams(requestIdSchema), getRequestById)
 router.post("/", authenticate, validate(requestSchema), createRequest)
 
+// ✅ NUEVAS RUTAS: Disponibilidad con autenticación
+router.get("/disponibilidad/dias", authenticate, getAvailableDays)
+router.get("/disponibilidad/horas", authenticate, getAvailableHours)
+router.post("/verificar-disponibilidad", authenticate, verificarDisponibilidad)
 
 // Rutas protegidas por supervisor o admin
 router.put(

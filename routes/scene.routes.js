@@ -9,13 +9,18 @@ import {
   getSports,
   getAmenities,
   getReservedHours,
+  getAvailableDays,
+  getAvailableHours,
+  checkAvailability,
 } from "../controllers/scene.controller.js"
-import { verificarDisponibilidad, getAvailableDays, getAvailableHours } from "../controllers/request.controller.js"
+import { verificarDisponibilidad } from "../controllers/request.controller.js"
 import { authenticate, isAdmin } from "../middlewares/auth.middleware.js"
 import { validate, validateParams } from "../middlewares/validation.middleware.js"
 import { sceneSchema, sceneIdSchema } from "../utils/validation.util.js"
 
 const router = express.Router()
+
+console.log("🔧 SCENE ROUTES - Configurando rutas...")
 
 // Rutas públicas (sin autenticación)
 router.get("/", getAllScenes)
@@ -23,14 +28,24 @@ router.get("/localidades", getLocations)
 router.get("/deportes", getSports)
 router.get("/amenidades", getAmenities)
 
-// Días disponibles para un escenario en un rango de fechas
+// ✅ RUTAS CRÍTICAS: Disponibilidad con logging detallado
+console.log("🔧 SCENE ROUTES - Configurando ruta /dias-disponibles")
 router.get("/dias-disponibles", getAvailableDays)
 
-// Horas disponibles para un escenario y fecha
-router.get("/horas-disponibles", getAvailableHours)
+console.log("🔧 SCENE ROUTES - Configurando ruta /horas-disponibles")
+router.get(
+  "/horas-disponibles",
+  (req, res, next) => {
+    console.log("🚨 SCENE ROUTES - Interceptando /horas-disponibles")
+    console.log("📥 Query params:", req.query)
+    console.log("📥 URL completa:", req.originalUrl)
+    next()
+  },
+  getAvailableHours,
+)
 
 // Verificar disponibilidad para un horario específico
-router.post("/verificar-disponibilidad", verificarDisponibilidad)
+router.post("/verificar-disponibilidad", checkAvailability)
 
 router.get("/:id", validateParams(sceneIdSchema), getSceneById)
 router.get("/:id/horas-reservadas", validateParams(sceneIdSchema), getReservedHours)
@@ -42,5 +57,7 @@ router.post("/disponibilidad", authenticate, verificarDisponibilidad)
 router.post("/", authenticate, isAdmin, validate(sceneSchema), createScene)
 router.put("/:id", authenticate, isAdmin, validateParams(sceneIdSchema), updateScene)
 router.delete("/:id", authenticate, isAdmin, validateParams(sceneIdSchema), deleteScene)
+
+console.log("✅ SCENE ROUTES - Todas las rutas configuradas")
 
 export default router

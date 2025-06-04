@@ -344,6 +344,250 @@ export const getAmenities = async (req, res) => {
   }
 }
 
+// ✅ FUNCIÓN CRÍTICA: Obtener días disponibles
+export const getAvailableDays = async (req, res) => {
+  try {
+    let { escenario_id, desde, hasta } = req.query
+
+    console.log("🔍 SCENE CONTROLLER - getAvailableDays - Parámetros:", { escenario_id, desde, hasta })
+
+    if (!escenario_id || !desde || !hasta) {
+      return sendError(res, "Error de validación en parámetros", 400, ["escenario_id, desde y hasta son requeridos"])
+    }
+
+    escenario_id = Number.parseInt(escenario_id)
+    if (isNaN(escenario_id)) {
+      return sendError(res, "Error de validación en parámetros", 400, ["El ID debe ser un número"])
+    }
+
+    const availableHours = ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00"]
+
+    // ✅ CORRECCIÓN: Usar estado_id = 3 (aprobada) según los datos reales
+    const reservasQuery = await query(
+      `
+      SELECT fecha_reserva, hora_inicio, hora_fin
+      FROM solicitudes
+      WHERE escenario_id = $1
+        AND DATE(fecha_reserva) BETWEEN DATE($2) AND DATE($3)
+        AND estado_id = 3
+      `,
+      [escenario_id, desde, hasta],
+    )
+
+    console.log("📅 SCENE CONTROLLER - Reservas aprobadas encontradas:", reservasQuery.rows.length)
+
+    // Agrupar reservas por fecha
+    const reservasPorFecha = {}
+    reservasQuery.rows.forEach((r) => {
+      const fecha = r.fecha_reserva.toISOString().slice(0, 10)
+      if (!reservasPorFecha[fecha]) reservasPorFecha[fecha] = []
+
+      const inicio = r.hora_inicio.length > 5 ? r.hora_inicio.slice(0, 5) : r.hora_inicio
+      const fin = r.hora_fin.length > 5 ? r.hora_fin.slice(0, 5) : r.hora_fin
+
+      reservasPorFecha[fecha].push({ inicio, fin })
+    })
+
+    // Generar fechas del rango
+    const fechas = []
+    const d = new Date(desde)
+    const end = new Date(hasta)
+    while (d <= end) {
+      fechas.push(d.toISOString().slice(0, 10))
+      d.setDate(d.getDate() + 1)
+    }
+
+    // Para cada fecha, verificar si hay al menos un horario libre
+    const diasDisponibles = fechas.filter((fecha) => {
+      const reservas = reservasPorFecha[fecha] || []
+      // Para cada horario, verificar si está libre
+      return availableHours.some((hora) => {
+        return !reservas.some((r) => hora >= r.inicio && hora < r.fin)
+      })
+    })
+
+    console.log("✅ SCENE CONTROLLER - Días disponibles finales:", diasDisponibles.length)
+
+    return sendResponse(res, diasDisponibles, "Días disponibles obtenidos exitosamente")
+  } catch (error) {
+    console.error("❌ Error en getAvailableDays:", error)
+    return sendError(res, "Error en el servidor", 500)
+  }
+}
+
+// ✅ FUNCIÓN CRÍTICA: Obtener horas disponibles - INVESTIGACIÓN PROFUNDA
+export const getAvailableHours = async (req, res) => {
+  try {
+    let { escenario_id, fecha } = req.query
+
+    console.log("🚨 INVESTIGACIÓN PROFUNDA - getAvailableHours")
+    console.log("📥 Parámetros:", { escenario_id, fecha })
+
+    if (!escenario_id || !fecha) {
+      return sendError(res, "Error de validación en parámetros", 400, ["escenario_id y fecha son requeridos"])
+    }
+
+    escenario_id = Number.parseInt(escenario_id)
+    if (isNaN(escenario_id)) {
+      return sendError(res, "Error de validación en parámetros", 400, ["El ID debe ser un número"])
+    }
+
+    // Horarios base disponibles
+    const availableHours = ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00"]
+    console.log("⏰ Horarios base:", availableHours)
+
+    // 🔍 INVESTIGACIÓN 1: Ver TODAS las solicitudes para este escenario
+    console.log("\n🔍 INVESTIGACIÓN 1: TODAS las solicitudes del escenario")
+    const todasSolicitudesQuery = await query(
+      `
+      SELECT id, fecha_reserva, hora_inicio, hora_fin, estado_id, codigo_reserva, created_at
+      FROM solicitudes
+      WHERE escenario_id = $1
+      ORDER BY fecha_reserva, hora_inicio
+      `,
+      [escenario_id],
+    )
+
+    console.log(`📊 Total solicitudes en el escenario: ${todasSolicitudesQuery.rows.length}`)
+    todasSolicitudesQuery.rows.forEach((s, index) => {
+      const fecha = s.fecha_reserva.toISOString().slice(0, 10)
+      console.log(
+        `   ${index + 1}. ID: ${s.id} | ${fecha} | ${s.hora_inicio}-${s.hora_fin} | Estado: ${s.estado_id} | ${s.codigo_reserva}`,
+      )
+    })
+
+    // 🔍 INVESTIGACIÓN 2: Buscar específicamente por fecha con diferentes métodos
+    console.log("\n🔍 INVESTIGACIÓN 2: Búsqueda por fecha con diferentes métodos")
+
+    // Método 1: Comparación directa
+    const metodo1 = await query(
+      `
+      SELECT id, fecha_reserva, hora_inicio, hora_fin, estado_id, codigo_reserva
+      FROM solicitudes
+      WHERE escenario_id = $1 AND fecha_reserva = $2
+      ORDER BY hora_inicio
+      `,
+      [escenario_id, fecha],
+    )
+    console.log(`📅 Método 1 (fecha_reserva = '${fecha}'): ${metodo1.rows.length} resultados`)
+
+    // Método 2: Con DATE()
+    const metodo2 = await query(
+      `
+      SELECT id, fecha_reserva, hora_inicio, hora_fin, estado_id, codigo_reserva
+      FROM solicitudes
+      WHERE escenario_id = $1 AND DATE(fecha_reserva) = DATE($2)
+      ORDER BY hora_inicio
+      `,
+      [escenario_id, fecha],
+    )
+    console.log(`📅 Método 2 (DATE() = DATE('${fecha}')): ${metodo2.rows.length} resultados`)
+
+    // Método 3: Con CAST
+    const metodo3 = await query(
+      `
+      SELECT id, fecha_reserva, hora_inicio, hora_fin, estado_id, codigo_reserva
+      FROM solicitudes
+      WHERE escenario_id = $1 AND fecha_reserva::date = $2::date
+      ORDER BY hora_inicio
+      `,
+      [escenario_id, fecha],
+    )
+    console.log(`📅 Método 3 (::date = '${fecha}'::date): ${metodo3.rows.length} resultados`)
+
+    // Método 4: Con BETWEEN
+    const fechaInicio = fecha + " 00:00:00"
+    const fechaFin = fecha + " 23:59:59"
+    const metodo4 = await query(
+      `
+      SELECT id, fecha_reserva, hora_inicio, hora_fin, estado_id, codigo_reserva
+      FROM solicitudes
+      WHERE escenario_id = $1 AND fecha_reserva BETWEEN $2 AND $3
+      ORDER BY hora_inicio
+      `,
+      [escenario_id, fechaInicio, fechaFin],
+    )
+    console.log(`📅 Método 4 (BETWEEN '${fechaInicio}' AND '${fechaFin}'): ${metodo4.rows.length} resultados`)
+
+    // 🔍 INVESTIGACIÓN 3: Buscar por código específico
+    console.log("\n🔍 INVESTIGACIÓN 3: Búsqueda por código específico")
+    const porCodigo = await query(
+      `
+      SELECT id, fecha_reserva, hora_inicio, hora_fin, estado_id, codigo_reserva, escenario_id
+      FROM solicitudes
+      WHERE codigo_reserva = 'RES-20250606-1462'
+      `,
+    )
+    console.log(`🔍 Reserva RES-20250606-1462: ${porCodigo.rows.length} resultados`)
+    if (porCodigo.rows.length > 0) {
+      const r = porCodigo.rows[0]
+      const fecha = r.fecha_reserva.toISOString().slice(0, 10)
+      console.log(
+        `   📋 Detalles: ID: ${r.id} | Escenario: ${r.escenario_id} | ${fecha} | ${r.hora_inicio}-${r.hora_fin} | Estado: ${r.estado_id}`,
+      )
+    }
+
+    // 🔍 INVESTIGACIÓN 4: Usar el método que más resultados devuelva
+    console.log("\n🔍 INVESTIGACIÓN 4: Seleccionando el mejor método")
+    const metodos = [
+      { nombre: "Método 1", resultados: metodo1.rows },
+      { nombre: "Método 2", resultados: metodo2.rows },
+      { nombre: "Método 3", resultados: metodo3.rows },
+      { nombre: "Método 4", resultados: metodo4.rows },
+    ]
+
+    const mejorMetodo = metodos.reduce((mejor, actual) =>
+      actual.resultados.length > mejor.resultados.length ? actual : mejor,
+    )
+
+    console.log(`🏆 Mejor método: ${mejorMetodo.nombre} con ${mejorMetodo.resultados.length} resultados`)
+
+    // Usar las reservas del mejor método, filtradas por estado aprobado
+    const reservasAprobadas = mejorMetodo.resultados.filter((r) => r.estado_id === 3)
+
+    console.log(`🔒 Reservas aprobadas (estado_id = 3): ${reservasAprobadas.length}`)
+    reservasAprobadas.forEach((r, index) => {
+      const fecha = r.fecha_reserva.toISOString().slice(0, 10)
+      console.log(`   ${index + 1}. ID: ${r.id} | ${fecha} | ${r.hora_inicio}-${r.hora_fin} | ${r.codigo_reserva}`)
+    })
+
+    // Procesar reservas ocupadas
+    const reservasOcupadas = reservasAprobadas.map((r) => {
+      const inicio = r.hora_inicio.length > 5 ? r.hora_inicio.slice(0, 5) : r.hora_inicio
+      const fin = r.hora_fin.length > 5 ? r.hora_fin.slice(0, 5) : r.hora_fin
+      return { inicio, fin, codigo: r.codigo_reserva, id: r.id }
+    })
+
+    // ✅ ANÁLISIS DETALLADO: Verificar cada hora contra TODAS las reservas
+    console.log("\n🔍 ANÁLISIS HORA POR HORA:")
+    const horasLibres = availableHours.filter((hora) => {
+      console.log(`\n⏰ Analizando hora: ${hora}`)
+
+      const conflictos = reservasOcupadas.filter((reserva) => {
+        const ocupado = hora >= reserva.inicio && hora < reserva.fin
+        console.log(`   vs ${reserva.codigo} (${reserva.inicio}-${reserva.fin}): ${ocupado ? "❌ CONFLICTO" : "✅ OK"}`)
+        return ocupado
+      })
+
+      const estaLibre = conflictos.length === 0
+      console.log(`   📊 Resultado: ${estaLibre ? "✅ DISPONIBLE" : "❌ OCUPADA"} (${conflictos.length} conflictos)`)
+
+      return estaLibre
+    })
+
+    console.log("\n" + "=".repeat(80))
+    console.log("🎯 RESULTADO FINAL:")
+    console.log(`📊 Horas disponibles: [${horasLibres.join(", ")}]`)
+    console.log(`📊 Total: ${horasLibres.length}/${availableHours.length} horas disponibles`)
+    console.log("=".repeat(80))
+
+    return sendResponse(res, horasLibres, "Horas disponibles obtenidas exitosamente")
+  } catch (error) {
+    console.error("❌ Error en getAvailableHours:", error)
+    return sendError(res, "Error en el servidor", 500)
+  }
+}
+
 // Verificar disponibilidad
 export const checkAvailability = async (req, res) => {
   try {
@@ -355,8 +599,8 @@ export const checkAvailability = async (req, res) => {
       SELECT id
       FROM solicitudes
       WHERE escenario_id = $1
-      AND fecha_reserva = $2
-      AND estado_id = (SELECT id FROM estados_solicitud WHERE nombre = 'aprobada')
+      AND DATE(fecha_reserva) = DATE($2)
+      AND estado_id = 3
       AND (
         (hora_inicio <= $3 AND hora_fin > $3) OR
         (hora_inicio < $4 AND hora_fin >= $4) OR
@@ -391,8 +635,8 @@ export const getReservedHours = async (req, res) => {
       SELECT hora_inicio, hora_fin
       FROM solicitudes
       WHERE escenario_id = $1
-      AND fecha_reserva = $2
-      AND estado_id = (SELECT id FROM estados_solicitud WHERE nombre = 'aprobada')
+      AND DATE(fecha_reserva) = DATE($2)
+      AND estado_id = 3
       ORDER BY hora_inicio
     `,
       [id, fecha],

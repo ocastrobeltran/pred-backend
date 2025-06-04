@@ -5,6 +5,7 @@ import { testConnection } from "./config/database.js"
 import path from "path"
 import { fileURLToPath } from "url"
 import { errorHandler } from "./middlewares/error.middleware.js"
+import debugRoutes from "./routes/debug.routes.js"
 
 // Importar rutas
 import authRoutes from "./routes/auth.routes.js"
@@ -73,6 +74,9 @@ app.get("/api/health", (req, res) => {
 
 // Middleware de manejo de errores
 app.use(errorHandler)
+
+// Rutas de depuración (solo para desarrollo)
+app.use("/api/debug", debugRoutes)
 
 // Iniciar servidor
 app.listen(PORT, () => {
